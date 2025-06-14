@@ -24,6 +24,10 @@ wheels/
 venv/
 env/
 ENV/
+pepenv/
+.venv/
+.env/
+.ENV/
 
 # IDE
 .idea/
