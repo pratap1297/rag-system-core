@@ -1,0 +1,16 @@
+Equipment Maintenance Manual
+
+1. Daily Inspections
+   - Check oil levels
+   - Inspect belts and chains
+   - Verify safety systems
+
+2. Weekly Maintenance
+   - Lubricate moving parts
+   - Check fluid levels
+   - Test emergency stops
+
+3. Monthly Procedures
+   - Replace filters
+   - Calibrate instruments
+   - Update maintenance logs

@@ -1,0 +1,89 @@
+# ===================================================================
+# RAG SYSTEM - PRODUCTION REQUIREMENTS
+# Enterprise RAG System with FastAPI, FAISS, and Multi-Provider AI
+# ===================================================================
+
+# ===== CORE API FRAMEWORK =====
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+
+# ===== AI/ML PROVIDERS =====
+# Embedding providers
+sentence-transformers
+cohere
+
+# Vector database
+faiss-cpu
+
+# LLM providers
+groq
+openai
+
+# Token counting
+tiktoken
+
+# Vector operations and scientific computing
+numpy
+
+# ===== DOCUMENT PROCESSING =====
+PyPDF2
+python-docx
+python-magic
+
+# Alternative PDF processing (fallback)
+pypdf2
+
+# ===== OCR & IMAGE PROCESSING (Phase 2.2) =====
+Pillow
+numpy
+
+# ===== DATA PROCESSING & ANALYSIS =====
+numpy
+pandas
+
+# ===== SYSTEM UTILITIES =====
+python-dotenv
+requests
+aiofiles
+psutil
+portalocker
+PyYAML
+
+# ===== SCHEDULING & BACKGROUND TASKS =====
+APScheduler
+schedule
+
+# ===== SECURITY & AUTHENTICATION =====
+python-jose[cryptography]
+
+# ===== WEB UI FRAMEWORK =====
+gradio
+
+# ===== MONITORING & OBSERVABILITY =====
+prometheus-client
+
+# ===== DEVELOPMENT & TESTING =====
+pytest
+pytest-asyncio
+black
+flake8
+mypy
+
+# ===== OPTIONAL DEPENDENCIES =====
+# Uncomment if using advanced graph processing
+# langgraph
+
+# Uncomment if using alternative UI framework
+# streamlit
+
+# Uncomment if using enhanced visualization
+# plotly
+# matplotlib
+
+# ===== NOTES =====
+# - sqlite3 is built into Python (no need to install)
+# - Standard library modules (asyncio, threading, hashlib, uuid, re, etc.) are built-in
+# - For Windows: python-magic-bin may be needed instead of python-magic
+# - For production: Consider pinning all versions for reproducibility

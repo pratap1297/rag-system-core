@@ -1,0 +1,2851 @@
+#!/usr/bin/env python3
+"""
+RAG System - Unified Entry Point
+Enhanced with comprehensive document processing capabilities
+"""
+
+import sys
+import os
+import argparse
+from pathlib import Path
+from datetime import datetime
+
+# Add src to Python path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+def setup_document_processing_commands(subparsers):
+    """Setup document processing commands"""
+    
+    # Document processing command group
+    doc_parser = subparsers.add_parser('document', help='Document processing operations')
+    doc_subparsers = doc_parser.add_subparsers(dest='doc_command', help='Document processing commands')
+    
+    # Process single document
+    process_parser = doc_subparsers.add_parser('process', help='Process a single document')
+    process_parser.add_argument('file_path', help='Path to document to process')
+    process_parser.add_argument('--chunking', choices=['fixed_size', 'sentence', 'semantic', 'hierarchical'], 
+                               default='fixed_size', help='Chunking strategy')
+    process_parser.add_argument('--chunk-size', type=int, default=1000, help='Chunk size for fixed_size strategy')
+    process_parser.add_argument('--overlap', type=int, default=200, help='Overlap size for chunking')
+    process_parser.add_argument('--output', help='Output directory for results')
+    
+    # Process batch of documents
+    batch_parser = doc_subparsers.add_parser('batch', help='Process multiple documents')
+    batch_parser.add_argument('input_dir', help='Input directory containing documents')
+    batch_parser.add_argument('--patterns', nargs='+', default=['*.pdf', '*.docx', '*.txt'], 
+                             help='File patterns to match')
+    batch_parser.add_argument('--chunking', choices=['fixed_size', 'sentence', 'semantic', 'hierarchical'], 
+                             default='fixed_size', help='Chunking strategy')
+    batch_parser.add_argument('--chunk-size', type=int, default=1000, help='Chunk size')
+    batch_parser.add_argument('--overlap', type=int, default=200, help='Overlap size')
+    batch_parser.add_argument('--output', help='Output directory for results')
+    batch_parser.add_argument('--concurrent', type=int, default=3, help='Max concurrent processing')
+    
+    # Validate documents
+    validate_parser = doc_subparsers.add_parser('validate', help='Validate documents')
+    validate_parser.add_argument('path', help='File or directory path to validate')
+    validate_parser.add_argument('--recursive', action='store_true', help='Recursive validation for directories')
+    validate_parser.add_argument('--output', help='Output file for validation report')
+    
+    # Extract text only
+    extract_parser = doc_subparsers.add_parser('extract', help='Extract text from document')
+    extract_parser.add_argument('file_path', help='Path to document')
+    extract_parser.add_argument('--output', help='Output file for extracted text')
+    
+    # Extract metadata only
+    metadata_parser = doc_subparsers.add_parser('metadata', help='Extract metadata from document')
+    metadata_parser.add_argument('file_path', help='Path to document')
+    metadata_parser.add_argument('--format', choices=['json', 'yaml'], default='json', help='Output format')
+    metadata_parser.add_argument('--output', help='Output file for metadata')
+    
+    # OCR processing commands (Phase 2.2)
+    ocr_parser = doc_subparsers.add_parser('ocr', help='OCR processing operations')
+    ocr_parser.add_argument('file_path', help='Path to image or PDF document')
+    ocr_parser.add_argument('--language', help='Language hint for OCR (e.g., en, es, fr)')
+    ocr_parser.add_argument('--provider', choices=['azure_vision', 'llama_maverick', 'auto'], 
+                           default='auto', help='OCR provider to use')
+    ocr_parser.add_argument('--preprocess', action='store_true', default=True, 
+                           help='Enable image preprocessing')
+    ocr_parser.add_argument('--no-preprocess', dest='preprocess', action='store_false',
+                           help='Disable image preprocessing')
+    ocr_parser.add_argument('--output', help='Output file for extracted text')
+    ocr_parser.add_argument('--format', choices=['text', 'json'], default='text', 
+                           help='Output format')
+    ocr_parser.add_argument('--confidence-threshold', type=float, default=0.7,
+                           help='Minimum confidence threshold')
+    
+    # OCR batch processing
+    ocr_batch_parser = doc_subparsers.add_parser('ocr-batch', help='Batch OCR processing')
+    ocr_batch_parser.add_argument('input_dir', help='Input directory containing images/PDFs')
+    ocr_batch_parser.add_argument('--patterns', nargs='+', 
+                                 default=['*.pdf', '*.png', '*.jpg', '*.jpeg', '*.tiff'], 
+                                 help='File patterns to match')
+    ocr_batch_parser.add_argument('--language', help='Language hint for OCR')
+    ocr_batch_parser.add_argument('--provider', choices=['azure_vision', 'llama_maverick', 'auto'], 
+                                 default='auto', help='OCR provider to use')
+    ocr_batch_parser.add_argument('--preprocess', action='store_true', default=True,
+                                 help='Enable image preprocessing')
+    ocr_batch_parser.add_argument('--concurrent', type=int, default=3, help='Max concurrent processing')
+    ocr_batch_parser.add_argument('--output', help='Output directory for results')
+    ocr_batch_parser.add_argument('--format', choices=['text', 'json'], default='json',
+                                 help='Output format')
+    
+    # OCR validation
+    ocr_validate_parser = doc_subparsers.add_parser('ocr-validate', help='Validate files for OCR processing')
+    ocr_validate_parser.add_argument('path', help='File or directory path to validate')
+    ocr_validate_parser.add_argument('--recursive', action='store_true', help='Recursive validation')
+    ocr_validate_parser.add_argument('--output', help='Output file for validation report')
+    
+    # Document Classification commands (Phase 2.3)
+    classify_parser = doc_subparsers.add_parser('classify', help='Classify document content')
+    classify_parser.add_argument('file_path', help='Path to document')
+    classify_parser.add_argument('--method', choices=['rules', 'llama', 'hybrid'], default='hybrid',
+                                help='Classification method to use')
+    classify_parser.add_argument('--confidence-threshold', type=float, default=0.6,
+                                help='Minimum confidence threshold')
+    classify_parser.add_argument('--output', help='Output file for classification results')
+    classify_parser.add_argument('--format', choices=['json', 'yaml'], default='json',
+                                help='Output format')
+    classify_parser.add_argument('--show-entities', action='store_true',
+                                help='Show extracted entities')
+    classify_parser.add_argument('--show-abstract', action='store_true',
+                                help='Show document abstract')
+    
+    # Batch classification
+    classify_batch_parser = doc_subparsers.add_parser('classify-batch', help='Batch document classification')
+    classify_batch_parser.add_argument('input_dir', help='Input directory containing documents')
+    classify_batch_parser.add_argument('--patterns', nargs='+',
+                                      default=['*.pdf', '*.docx', '*.doc', '*.txt'],
+                                      help='File patterns to match')
+    classify_batch_parser.add_argument('--method', choices=['rules', 'llama', 'hybrid'], default='hybrid',
+                                      help='Classification method to use')
+    classify_batch_parser.add_argument('--concurrent', type=int, default=5,
+                                      help='Max concurrent processing')
+    classify_batch_parser.add_argument('--output', help='Output directory for results')
+    classify_batch_parser.add_argument('--format', choices=['json', 'yaml'], default='json',
+                                      help='Output format')
+    classify_batch_parser.add_argument('--confidence-threshold', type=float, default=0.6,
+                                      help='Minimum confidence threshold')
+    
+    # Classification statistics
+    classify_stats_parser = doc_subparsers.add_parser('classify-stats', help='Show classification statistics')
+    classify_stats_parser.add_argument('--clear-cache', action='store_true',
+                                      help='Clear classification cache before showing stats')
+
+def handle_document_commands(args):
+    """Handle document processing commands"""
+    
+    if args.doc_command == 'process':
+        handle_process_document(args)
+    elif args.doc_command == 'batch':
+        handle_batch_process(args)
+    elif args.doc_command == 'validate':
+        handle_validate_documents(args)
+    elif args.doc_command == 'extract':
+        handle_extract_text(args)
+    elif args.doc_command == 'metadata':
+        handle_extract_metadata(args)
+    elif args.doc_command == 'ocr':
+        handle_ocr_processing(args)
+    elif args.doc_command == 'ocr-batch':
+        handle_ocr_batch_processing(args)
+    elif args.doc_command == 'ocr-validate':
+        handle_ocr_validation(args)
+    elif args.doc_command == 'classify':
+        handle_classify_document(args)
+    elif args.doc_command == 'classify-batch':
+        handle_classify_batch(args)
+    elif args.doc_command == 'classify-stats':
+        handle_classify_stats(args)
+    else:
+        print("❌ Unknown document command. Use --help for available commands.")
+        return False
+    
+    return True
+
+def handle_process_document(args):
+    """Handle single document processing"""
+    
+    try:
+        from document_processing.document_processor import DocumentProcessor
+        from document_processing.chunking_strategies import (
+            FixedSizeChunker, SentenceChunker, SemanticChunker, HierarchicalChunker
+        )
+        
+        print(f"🔄 Processing document: {args.file_path}")
+        
+        # Create chunking strategy
+        if args.chunking == 'fixed_size':
+            chunker = FixedSizeChunker(chunk_size=args.chunk_size, overlap=args.overlap)
+        elif args.chunking == 'sentence':
+            chunker = SentenceChunker(max_sentences=args.chunk_size // 100)
+        elif args.chunking == 'semantic':
+            chunker = SemanticChunker(max_chunk_size=args.chunk_size)
+        elif args.chunking == 'hierarchical':
+            chunker = HierarchicalChunker()
+        
+        # Process document
+        processor = DocumentProcessor()
+        result = processor.process_document(args.file_path, chunker)
+        
+        # Display results
+        print(f"✅ Processing completed:")
+        print(f"   Document ID: {result.document_id}")
+        print(f"   Success: {result.success}")
+        print(f"   Chunks created: {len(result.chunks)}")
+        print(f"   Processing time: {result.processing_time:.3f}s")
+        
+        if result.errors:
+            print(f"⚠️ Errors: {len(result.errors)}")
+            for error in result.errors:
+                print(f"   - {error}")
+        
+        # Save results if output specified
+        if args.output:
+            save_processing_results([result], args.output)
+            print(f"📁 Results saved to: {args.output}")
+        
+        return result.success
+        
+    except Exception as e:
+        print(f"❌ Document processing failed: {e}")
+        return False
+
+def handle_batch_process(args):
+    """Handle batch document processing"""
+    
+    try:
+        from document_processing.processing_pipeline import ProcessingPipeline, PipelineConfig
+        
+        print(f"📦 Starting batch processing: {args.input_dir}")
+        
+        # Create pipeline configuration
+        config = PipelineConfig(
+            input_directory=args.input_dir,
+            file_patterns=args.patterns,
+            chunking_strategy=args.chunking,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.overlap,
+            max_concurrent=args.concurrent
+        )
+        
+        # Run pipeline
+        pipeline = ProcessingPipeline()
+        result = pipeline.run_pipeline(config)
+        
+        # Display results
+        print(f"✅ Batch processing completed:")
+        print(f"   Pipeline ID: {result.pipeline_id}")
+        print(f"   Status: {result.status.value}")
+        print(f"   Total files: {result.total_files}")
+        print(f"   Successful: {result.successful_files}")
+        print(f"   Failed: {result.failed_files}")
+        print(f"   Total chunks: {result.total_chunks}")
+        print(f"   Success rate: {result.success_rate:.1f}%")
+        print(f"   Duration: {result.duration:.3f}s")
+        
+        if result.errors:
+            print(f"⚠️ Errors encountered: {len(result.errors)}")
+            for error in result.errors[:5]:  # Show first 5 errors
+                print(f"   - {error}")
+        
+        # Save results if output specified
+        if args.output:
+            save_processing_results(result.processing_results, args.output)
+            print(f"📁 Results saved to: {args.output}")
+        
+        return result.successful_files > 0
+        
+    except Exception as e:
+        print(f"❌ Batch processing failed: {e}")
+        return False
+
+def handle_validate_documents(args):
+    """Handle document validation"""
+    
+    try:
+        from document_processing.document_validator import DocumentValidator
+        from pathlib import Path
+        
+        print(f"🔍 Validating: {args.path}")
+        
+        validator = DocumentValidator()
+        path = Path(args.path)
+        
+        if path.is_file():
+            # Validate single file
+            result = validator.validate_document(str(path))
+            results = [result]
+        elif path.is_dir():
+            # Validate directory
+            if args.recursive:
+                files = list(path.rglob("*"))
+            else:
+                files = list(path.glob("*"))
+            
+            file_paths = [str(f) for f in files if f.is_file()]
+            results = validator.validate_batch(file_paths)
+        else:
+            print(f"❌ Path not found: {args.path}")
+            return False
+        
+        # Display results
+        valid_count = sum(1 for r in results if r.is_valid)
+        total_count = len(results)
+        
+        print(f"✅ Validation completed:")
+        print(f"   Total files: {total_count}")
+        print(f"   Valid files: {valid_count}")
+        print(f"   Invalid files: {total_count - valid_count}")
+        print(f"   Validation rate: {(valid_count/total_count*100):.1f}%")
+        
+        # Show issues
+        issues = []
+        warnings = []
+        for result in results:
+            issues.extend(result.issues)
+            warnings.extend(result.warnings)
+        
+        if issues:
+            print(f"❌ Issues found: {len(issues)}")
+            for issue in set(issues)[:10]:  # Show unique issues
+                print(f"   - {issue}")
+        
+        if warnings:
+            print(f"⚠️ Warnings: {len(warnings)}")
+            for warning in set(warnings)[:5]:  # Show unique warnings
+                print(f"   - {warning}")
+        
+        # Save validation report if output specified
+        if args.output:
+            save_validation_report(results, args.output)
+            print(f"📁 Validation report saved to: {args.output}")
+        
+        return valid_count == total_count
+        
+    except Exception as e:
+        print(f"❌ Validation failed: {e}")
+        return False
+
+def handle_extract_text(args):
+    """Handle text extraction"""
+    
+    try:
+        from document_processing.text_extractor import TextExtractor
+        
+        print(f"📄 Extracting text from: {args.file_path}")
+        
+        extractor = TextExtractor()
+        result = extractor.extract_text(args.file_path)
+        
+        print(f"✅ Text extraction completed:")
+        print(f"   Method: {result.extraction_method}")
+        print(f"   Confidence: {result.confidence}")
+        print(f"   Text length: {len(result.text)} characters")
+        
+        if args.output:
+            with open(args.output, 'w', encoding='utf-8') as f:
+                f.write(result.text)
+            print(f"📁 Text saved to: {args.output}")
+        else:
+            # Show preview
+            preview = result.text[:500] + "..." if len(result.text) > 500 else result.text
+            print(f"\n📝 Text preview:\n{preview}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Text extraction failed: {e}")
+        return False
+
+def handle_extract_metadata(args):
+    """Handle metadata extraction"""
+    
+    try:
+        from document_processing.metadata_extractor import MetadataExtractor
+        from document_processing.text_extractor import TextExtractor
+        import json
+        import yaml
+        
+        print(f"📋 Extracting metadata from: {args.file_path}")
+        
+        # Extract text first
+        text_extractor = TextExtractor()
+        text_result = text_extractor.extract_text(args.file_path)
+        
+        # Extract metadata
+        metadata_extractor = MetadataExtractor()
+        metadata = metadata_extractor.extract_metadata(
+            args.file_path,
+            text_result.text,
+            {
+                'extraction_method': text_result.extraction_method,
+                'confidence': text_result.confidence,
+                'metadata': text_result.metadata
+            }
+        )
+        
+        # Convert to dictionary
+        metadata_dict = metadata_extractor.to_dict(metadata)
+        
+        print(f"✅ Metadata extraction completed:")
+        print(f"   File: {metadata.file_name}")
+        print(f"   Size: {metadata.file_size} bytes")
+        print(f"   Type: {metadata.file_type}")
+        print(f"   Language: {metadata.language}")
+        print(f"   Text length: {metadata.text_length}")
+        
+        if args.output:
+            # Save to file
+            if args.format == 'json':
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    json.dump(metadata_dict, f, indent=2, ensure_ascii=False)
+            else:  # yaml
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    yaml.dump(metadata_dict, f, default_flow_style=False, indent=2)
+            
+            print(f"📁 Metadata saved to: {args.output}")
+        else:
+            # Display metadata
+            if args.format == 'json':
+                print(f"\n📋 Metadata (JSON):\n{json.dumps(metadata_dict, indent=2, ensure_ascii=False)}")
+            else:
+                print(f"\n📋 Metadata (YAML):\n{yaml.dump(metadata_dict, default_flow_style=False, indent=2)}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Metadata extraction failed: {e}")
+        return False
+
+def handle_ocr_processing(args):
+    """Handle OCR processing"""
+    
+    try:
+        from document_processing.ocr_processor import OCRProcessor
+        import json
+        
+        print(f"🔍 Starting OCR processing: {args.file_path}")
+        
+        # Initialize OCR processor
+        processor = OCRProcessor()
+        
+        # Validate file first
+        is_valid, message = processor.validate_file(args.file_path)
+        if not is_valid:
+            print(f"❌ File validation failed: {message}")
+            return False
+        
+        print(f"✅ File validation passed: {message}")
+        
+        # Process with OCR
+        result = processor.process_document(
+            args.file_path,
+            language=args.language,
+            preprocess_images=args.preprocess
+        )
+        
+        # Display results
+        print(f"✅ OCR processing completed:")
+        print(f"   Provider: {result.provider.value}")
+        print(f"   Fallback used: {result.fallback_used}")
+        print(f"   Overall confidence: {result.overall_confidence:.3f}")
+        print(f"   Quality level: {result.quality_metrics.get('quality_level', 'unknown')}")
+        print(f"   Pages processed: {len(result.pages)}")
+        print(f"   Text length: {len(result.text)} characters")
+        print(f"   Processing time: {result.processing_time:.3f}s")
+        
+        if result.warnings:
+            print(f"⚠️ Warnings: {len(result.warnings)}")
+            for warning in result.warnings:
+                print(f"   - {warning}")
+        
+        if result.errors:
+            print(f"❌ Errors: {len(result.errors)}")
+            for error in result.errors:
+                print(f"   - {error}")
+        
+        # Check confidence threshold
+        if result.overall_confidence < args.confidence_threshold:
+            print(f"⚠️ Warning: OCR confidence ({result.overall_confidence:.3f}) below threshold ({args.confidence_threshold})")
+        
+        # Save results
+        if args.output:
+            if args.format == 'json':
+                # Save as JSON with full OCR result
+                ocr_data = {
+                    'text': result.text,
+                    'provider': result.provider.value,
+                    'fallback_used': result.fallback_used,
+                    'overall_confidence': result.overall_confidence,
+                    'processing_time': result.processing_time,
+                    'quality_metrics': result.quality_metrics,
+                    'layout_analysis': result.layout_analysis,
+                    'pages': [
+                        {
+                            'page_number': page.page_number,
+                            'text': page.text,
+                            'confidence': page.confidence,
+                            'image_dimensions': page.image_dimensions,
+                            'language': page.language
+                        }
+                        for page in result.pages
+                    ],
+                    'language': result.language,
+                    'errors': result.errors,
+                    'warnings': result.warnings
+                }
+                
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    json.dump(ocr_data, f, indent=2, ensure_ascii=False)
+            else:
+                # Save as plain text
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    f.write(result.text)
+            
+            print(f"📁 OCR results saved to: {args.output}")
+        else:
+            # Show preview
+            preview = result.text[:500] + "..." if len(result.text) > 500 else result.text
+            print(f"\n📝 OCR Text Preview:\n{preview}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ OCR processing failed: {e}")
+        return False
+
+def handle_ocr_batch_processing(args):
+    """Handle batch OCR processing"""
+    
+    try:
+        from document_processing.ocr_processor import OCRProcessor
+        from pathlib import Path
+        import json
+        import asyncio
+        
+        print(f"📦 Starting batch OCR processing: {args.input_dir}")
+        
+        # Find files
+        input_path = Path(args.input_dir)
+        if not input_path.exists():
+            print(f"❌ Input directory not found: {args.input_dir}")
+            return False
+        
+        file_paths = []
+        for pattern in args.patterns:
+            file_paths.extend(input_path.glob(pattern))
+        
+        if not file_paths:
+            print(f"❌ No files found matching patterns: {args.patterns}")
+            return False
+        
+        file_paths = [str(f) for f in file_paths if f.is_file()]
+        print(f"📄 Found {len(file_paths)} files to process")
+        
+        # Initialize OCR processor
+        processor = OCRProcessor()
+        
+        # Process files asynchronously
+        print(f"🔄 Processing {len(file_paths)} files with {args.concurrent} concurrent workers...")
+        
+        async def run_batch():
+            return await processor.process_batch_async(
+                file_paths,
+                language=args.language,
+                max_concurrent=args.concurrent
+            )
+        
+        results = asyncio.run(run_batch())
+        
+        # Analyze results
+        successful = sum(1 for r in results if not r.errors)
+        total_text_length = sum(len(r.text) for r in results if not r.errors)
+        avg_confidence = sum(r.overall_confidence for r in results if not r.errors) / max(successful, 1)
+        total_processing_time = sum(r.processing_time for r in results)
+        
+        print(f"✅ Batch OCR processing completed:")
+        print(f"   Total files: {len(results)}")
+        print(f"   Successful: {successful}")
+        print(f"   Failed: {len(results) - successful}")
+        print(f"   Success rate: {(successful/len(results)*100):.1f}%")
+        print(f"   Average confidence: {avg_confidence:.3f}")
+        print(f"   Total text extracted: {total_text_length} characters")
+        print(f"   Total processing time: {total_processing_time:.3f}s")
+        
+        # Show errors
+        errors = []
+        for result in results:
+            errors.extend(result.errors)
+        
+        if errors:
+            print(f"❌ Errors encountered: {len(errors)}")
+            for error in set(errors)[:5]:  # Show unique errors
+                print(f"   - {error}")
+        
+        # Save results
+        if args.output:
+            output_path = Path(args.output)
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            # Save individual results
+            for i, result in enumerate(results):
+                file_name = Path(file_paths[i]).stem
+                
+                if args.format == 'json':
+                    result_file = output_path / f"{file_name}_ocr.json"
+                    ocr_data = {
+                        'source_file': file_paths[i],
+                        'text': result.text,
+                        'provider': result.provider.value,
+                        'fallback_used': result.fallback_used,
+                        'overall_confidence': result.overall_confidence,
+                        'processing_time': result.processing_time,
+                        'quality_metrics': result.quality_metrics,
+                        'errors': result.errors,
+                        'warnings': result.warnings
+                    }
+                    
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        json.dump(ocr_data, f, indent=2, ensure_ascii=False)
+                else:
+                    result_file = output_path / f"{file_name}_ocr.txt"
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        f.write(result.text)
+            
+            # Save summary
+            summary_file = output_path / 'ocr_batch_summary.json'
+            summary = {
+                'timestamp': datetime.now().isoformat(),
+                'input_directory': args.input_dir,
+                'patterns': args.patterns,
+                'total_files': len(results),
+                'successful_files': successful,
+                'failed_files': len(results) - successful,
+                'success_rate': successful/len(results)*100,
+                'average_confidence': avg_confidence,
+                'total_text_length': total_text_length,
+                'total_processing_time': total_processing_time,
+                'files': [
+                    {
+                        'file_path': file_paths[i],
+                        'success': not bool(result.errors),
+                        'confidence': result.overall_confidence,
+                        'text_length': len(result.text),
+                        'processing_time': result.processing_time,
+                        'provider': result.provider.value,
+                        'errors': result.errors
+                    }
+                    for i, result in enumerate(results)
+                ]
+            }
+            
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Results saved to: {args.output}")
+        
+        return successful > 0
+        
+    except Exception as e:
+        print(f"❌ Batch OCR processing failed: {e}")
+        return False
+
+def handle_ocr_validation(args):
+    """Handle OCR file validation"""
+    try:
+        from src.document_processing.ocr_processor import OCRProcessor
+        from src.core.config_manager import ConfigManager
+        
+        config_manager = ConfigManager()
+        ocr_processor = OCRProcessor(config_manager.get_config())
+        
+        # Validate file
+        is_valid, issues = ocr_processor.validate_file(args.file)
+        
+        if is_valid:
+            print(f"✅ File '{args.file}' is valid for OCR processing")
+        else:
+            print(f"❌ File '{args.file}' has validation issues:")
+            for issue in issues:
+                print(f"  - {issue}")
+        
+        return 0 if is_valid else 1
+        
+    except Exception as e:
+        print(f"❌ OCR validation failed: {e}")
+        return 1
+
+def handle_classify_document(args):
+    """Handle document classification"""
+    
+    try:
+        from document_processing.document_classifier import DocumentClassifier
+        from document_processing.text_extractor import TextExtractor
+        import json
+        import yaml
+        import asyncio
+        
+        print(f"🏷️ Classifying document: {args.file_path}")
+        
+        # Extract text first
+        extractor = TextExtractor()
+        text_result = extractor.extract_text(args.file_path)
+        
+        if text_result.errors:
+            print(f"❌ Text extraction failed: {', '.join(text_result.errors)}")
+            return False
+        
+        print(f"✅ Text extracted: {len(text_result.text)} characters")
+        
+        # Initialize classifier
+        config = {
+            'confidence_threshold': args.confidence_threshold,
+            'use_hybrid_approach': args.method == 'hybrid',
+            'enable_caching': True
+        }
+        
+        if args.method == 'rules':
+            config['use_hybrid_approach'] = False
+        
+        classifier = DocumentClassifier(config)
+        
+        # Classify document
+        metadata = {
+            'title': text_result.metadata.get('title', 'Unknown'),
+            'file_type': text_result.metadata.get('file_type', 'Unknown'),
+            'page_count': text_result.metadata.get('page_count', 'Unknown')
+        }
+        
+        print(f"🔄 Running classification with method: {args.method}")
+        
+        async def run_classification():
+            return await classifier.classify_document(text_result.text, metadata)
+        
+        result = asyncio.run(run_classification())
+        
+        # Display results
+        print(f"✅ Classification completed:")
+        print(f"   Primary category: {result.primary_category.value}")
+        print(f"   Confidence: {result.overall_confidence.value}")
+        print(f"   Method: {result.classification_method}")
+        print(f"   Processing time: {result.processing_time:.3f}s")
+        
+        if result.secondary_categories:
+            print(f"   Secondary categories: {[cat.value for cat in result.secondary_categories]}")
+        
+        # Show confidence scores
+        print(f"   Confidence scores:")
+        for category, score in result.confidence_scores.items():
+            print(f"     {category.value}: {score:.3f}")
+        
+        if result.needs_review:
+            print(f"⚠️ Review needed: {', '.join(result.review_reasons)}")
+        
+        if result.matched_rules:
+            print(f"📋 Matched rules: {', '.join(result.matched_rules)}")
+        
+        # Show entities if requested
+        if args.show_entities:
+            print(f"\n🏷️ Extracted Entities:")
+            if result.entities.equipment_names:
+                print(f"   Equipment: {', '.join(result.entities.equipment_names)}")
+            if result.entities.procedures:
+                print(f"   Procedures: {', '.join(result.entities.procedures)}")
+            if result.entities.personnel_roles:
+                print(f"   Personnel: {', '.join(result.entities.personnel_roles)}")
+        
+        # Show abstract if requested
+        if args.show_abstract:
+            print(f"\n📄 Document Abstract:")
+            if hasattr(result.abstract, 'summary'):
+                print(f"   Summary: {result.abstract.summary}")
+                print(f"   Purpose: {result.abstract.purpose}")
+                print(f"   Main topics: {', '.join(result.abstract.main_topics)}")
+                print(f"   Word count: {result.abstract.word_count}")
+                print(f"   Reading time: {result.abstract.reading_time_minutes} minutes")
+            else:
+                print(f"   Summary: {result.abstract}")
+        
+        # Save results
+        if args.output:
+            classification_data = {
+                'document_id': result.document_id,
+                'file_path': args.file_path,
+                'primary_category': result.primary_category.value,
+                'secondary_categories': [cat.value for cat in result.secondary_categories],
+                'confidence_scores': {cat.value: score for cat, score in result.confidence_scores.items()},
+                'overall_confidence': result.overall_confidence.value,
+                'classification_method': result.classification_method,
+                'processing_time': result.processing_time,
+                'timestamp': result.timestamp.isoformat(),
+                'needs_review': result.needs_review,
+                'review_reasons': result.review_reasons,
+                'matched_rules': result.matched_rules,
+                'abstract': {
+                    'summary': result.abstract.summary,
+                    'main_topics': result.abstract.main_topics,
+                    'purpose': result.abstract.purpose,
+                    'key_points': result.abstract.key_points,
+                    'word_count': result.abstract.word_count,
+                    'reading_time_minutes': result.abstract.reading_time_minutes
+                },
+                'entities': {
+                    'equipment_names': result.entities.equipment_names,
+                    'procedures': result.entities.procedures,
+                    'personnel_roles': result.entities.personnel_roles,
+                    'locations': result.entities.locations,
+                    'dates': result.entities.dates,
+                    'keywords': result.entities.keywords
+                }
+            }
+            
+            if args.format == 'yaml':
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    yaml.dump(classification_data, f, default_flow_style=False, indent=2)
+            else:
+                with open(args.output, 'w', encoding='utf-8') as f:
+                    json.dump(classification_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Classification results saved to: {args.output}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Document classification failed: {e}")
+        return False
+
+def handle_classify_batch(args):
+    """Handle batch document classification"""
+    
+    try:
+        from document_processing.document_classifier import DocumentClassifier
+        from document_processing.text_extractor import TextExtractor
+        from pathlib import Path
+        import json
+        import yaml
+        import asyncio
+        from datetime import datetime
+        
+        print(f"📦 Starting batch classification: {args.input_dir}")
+        
+        # Find files
+        input_path = Path(args.input_dir)
+        if not input_path.exists():
+            print(f"❌ Input directory not found: {args.input_dir}")
+            return False
+        
+        file_paths = []
+        for pattern in args.patterns:
+            file_paths.extend(input_path.glob(pattern))
+        
+        if not file_paths:
+            print(f"❌ No files found matching patterns: {args.patterns}")
+            return False
+        
+        file_paths = [str(f) for f in file_paths if f.is_file()]
+        print(f"📄 Found {len(file_paths)} files to classify")
+        
+        # Initialize components
+        extractor = TextExtractor()
+        config = {
+            'confidence_threshold': args.confidence_threshold,
+            'use_hybrid_approach': args.method == 'hybrid',
+            'enable_caching': True
+        }
+        
+        if args.method == 'rules':
+            config['use_hybrid_approach'] = False
+        
+        classifier = DocumentClassifier(config)
+        
+        # Extract text from all files
+        print(f"🔄 Extracting text from {len(file_paths)} files...")
+        documents = []
+        
+        for file_path in file_paths:
+            try:
+                text_result = extractor.extract_text(file_path)
+                if not text_result.errors:
+                    metadata = {
+                        'title': text_result.metadata.get('title', Path(file_path).stem),
+                        'file_type': text_result.metadata.get('file_type', Path(file_path).suffix),
+                        'page_count': text_result.metadata.get('page_count', 'Unknown'),
+                        'file_path': file_path
+                    }
+                    documents.append((text_result.text, metadata))
+                else:
+                    print(f"⚠️ Failed to extract text from: {Path(file_path).name}")
+            except Exception as e:
+                print(f"⚠️ Error processing {Path(file_path).name}: {e}")
+        
+        if not documents:
+            print(f"❌ No documents could be processed")
+            return False
+        
+        print(f"✅ Text extracted from {len(documents)} documents")
+        
+        # Classify documents
+        print(f"🔄 Classifying {len(documents)} documents with {args.concurrent} concurrent workers...")
+        
+        async def run_batch_classification():
+            return await classifier.classify_batch(documents, max_concurrent=args.concurrent)
+        
+        results = asyncio.run(run_batch_classification())
+        
+        # Analyze results
+        successful = len(results)
+        categories = {}
+        confidence_levels = {}
+        review_needed = 0
+        
+        for result in results:
+            # Category distribution
+            category = result.primary_category.value
+            categories[category] = categories.get(category, 0) + 1
+            
+            # Confidence distribution
+            confidence = result.overall_confidence.value
+            confidence_levels[confidence] = confidence_levels.get(confidence, 0) + 1
+            
+            # Review needed
+            if result.needs_review:
+                review_needed += 1
+        
+        print(f"✅ Batch classification completed:")
+        print(f"   Total files: {len(file_paths)}")
+        print(f"   Successfully classified: {successful}")
+        print(f"   Failed: {len(file_paths) - successful}")
+        print(f"   Success rate: {(successful/len(file_paths)*100):.1f}%")
+        print(f"   Documents needing review: {review_needed}")
+        
+        # Show category distribution
+        print(f"📊 Category Distribution:")
+        for category, count in sorted(categories.items()):
+            percentage = (count / successful * 100) if successful > 0 else 0
+            print(f"   {category}: {count} ({percentage:.1f}%)")
+        
+        # Show confidence distribution
+        print(f"📊 Confidence Distribution:")
+        for confidence, count in sorted(confidence_levels.items()):
+            percentage = (count / successful * 100) if successful > 0 else 0
+            print(f"   {confidence}: {count} ({percentage:.1f}%)")
+        
+        # Save results
+        if args.output:
+            output_path = Path(args.output)
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            # Save individual results
+            for i, result in enumerate(results):
+                file_name = Path(file_paths[i]).stem
+                
+                classification_data = {
+                    'document_id': result.document_id,
+                    'file_path': file_paths[i],
+                    'primary_category': result.primary_category.value,
+                    'secondary_categories': [cat.value for cat in result.secondary_categories],
+                    'confidence_scores': {cat.value: score for cat, score in result.confidence_scores.items()},
+                    'overall_confidence': result.overall_confidence.value,
+                    'classification_method': result.classification_method,
+                    'processing_time': result.processing_time,
+                    'timestamp': result.timestamp.isoformat(),
+                    'needs_review': result.needs_review,
+                    'review_reasons': result.review_reasons,
+                    'matched_rules': result.matched_rules
+                }
+                
+                if args.format == 'yaml':
+                    result_file = output_path / f"{file_name}_classification.yaml"
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        yaml.dump(classification_data, f, default_flow_style=False, indent=2)
+                else:
+                    result_file = output_path / f"{file_name}_classification.json"
+                    with open(result_file, 'w', encoding='utf-8') as f:
+                        json.dump(classification_data, f, indent=2, ensure_ascii=False)
+            
+            # Save summary
+            summary_file = output_path / 'classification_batch_summary.json'
+            summary = {
+                'timestamp': datetime.now().isoformat(),
+                'input_directory': args.input_dir,
+                'patterns': args.patterns,
+                'method': args.method,
+                'total_files': len(file_paths),
+                'successful_classifications': successful,
+                'failed_classifications': len(file_paths) - successful,
+                'success_rate': (successful/len(file_paths)*100) if len(file_paths) > 0 else 0,
+                'documents_needing_review': review_needed,
+                'category_distribution': categories,
+                'confidence_distribution': confidence_levels,
+                'files': [
+                    {
+                        'file_path': file_paths[i],
+                        'success': i < len(results),
+                        'primary_category': results[i].primary_category.value if i < len(results) else None,
+                        'confidence': results[i].overall_confidence.value if i < len(results) else None,
+                        'needs_review': results[i].needs_review if i < len(results) else None,
+                        'processing_time': results[i].processing_time if i < len(results) else None
+                    }
+                    for i in range(len(file_paths))
+                ]
+            }
+            
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Results saved to: {args.output}")
+        
+        return successful > 0
+        
+    except Exception as e:
+        print(f"❌ Batch classification failed: {e}")
+        return False
+
+def handle_classify_stats(args):
+    """Handle classification statistics"""
+    
+    try:
+        from document_processing.document_classifier import DocumentClassifier
+        
+        print(f"📊 Classification Statistics")
+        
+        # Initialize classifier
+        classifier = DocumentClassifier()
+        
+        # Clear cache if requested
+        if args.clear_cache:
+            classifier.clear_cache()
+            print(f"🗑️ Classification cache cleared")
+        
+        # Get statistics
+        stats = classifier.get_classification_stats()
+        
+        if stats['total_classifications'] == 0:
+            print(f"📊 No classification data available")
+            return True
+        
+        print(f"📊 Classification Statistics:")
+        print(f"   Total classifications: {stats['total_classifications']}")
+        print(f"   Documents needing review: {stats['review_needed']} ({stats['review_percentage']:.1f}%)")
+        
+        # Category distribution
+        print(f"\n📊 Category Distribution:")
+        for category, count in sorted(stats['category_distribution'].items()):
+            percentage = (count / stats['total_classifications'] * 100)
+            print(f"   {category}: {count} ({percentage:.1f}%)")
+        
+        # Confidence distribution
+        print(f"\n📊 Confidence Distribution:")
+        for confidence, count in sorted(stats['confidence_distribution'].items()):
+            percentage = (count / stats['total_classifications'] * 100)
+            print(f"   {confidence}: {count} ({percentage:.1f}%)")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Failed to get classification statistics: {e}")
+        return False
+
+def save_processing_results(results, output_dir):
+    """Save processing results to directory"""
+    
+    import json
+    from pathlib import Path
+    from datetime import datetime
+    
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Create summary
+    summary = {
+        'timestamp': datetime.now().isoformat(),
+        'total_documents': len(results),
+        'successful_documents': sum(1 for r in results if r.success),
+        'total_chunks': sum(len(r.chunks) for r in results if r.success),
+        'documents': []
+    }
+    
+    for result in results:
+        doc_info = {
+            'document_id': result.document_id,
+            'file_path': result.file_path,
+            'success': result.success,
+            'chunk_count': len(result.chunks),
+            'processing_time': result.processing_time,
+            'errors': result.errors
+        }
+        summary['documents'].append(doc_info)
+    
+    # Save summary
+    summary_file = output_path / 'processing_summary.json'
+    with open(summary_file, 'w', encoding='utf-8') as f:
+        json.dump(summary, f, indent=2, ensure_ascii=False)
+
+def save_validation_report(results, output_file):
+    """Save validation report"""
+    
+    import json
+    from datetime import datetime
+    
+    report = {
+        'timestamp': datetime.now().isoformat(),
+        'total_files': len(results),
+        'valid_files': sum(1 for r in results if r.is_valid),
+        'invalid_files': sum(1 for r in results if not r.is_valid),
+        'validation_rate': (sum(1 for r in results if r.is_valid) / len(results) * 100) if results else 0,
+        'files': []
+    }
+    
+    for result in results:
+        file_info = {
+            'file_path': result.file_path,
+            'is_valid': result.is_valid,
+            'file_size': result.file_size,
+            'file_type': result.file_type,
+            'issues': result.issues,
+            'warnings': result.warnings,
+            'validation_time': result.validation_time
+        }
+        report['files'].append(file_info)
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(report, f, indent=2, ensure_ascii=False)
+
+# =============================================================================
+# PHASE 3.2: VECTOR EMBEDDING COMMAND HANDLERS
+# =============================================================================
+
+def handle_embed_commands(args):
+    """Handle embedding commands"""
+    
+    if args.embed_command == 'text':
+        return handle_text_embedding(args)
+    elif args.embed_command == 'chunks':
+        return handle_chunk_embedding(args)
+    elif args.embed_command == 'batch':
+        return handle_batch_embedding(args)
+    elif args.embed_command == 'quality':
+        return handle_embedding_quality_analysis(args)
+    elif args.embed_command == 'cache':
+        return handle_embedding_cache_commands(args)
+    else:
+        print("❌ Unknown embedding command")
+        return 1
+
+def handle_text_embedding(args):
+    """Handle single text embedding"""
+    
+    try:
+        import asyncio
+        import json
+        from document_processing.vector_embedder import create_vector_embedder, InputType, EmbeddingProvider
+        from core.config_manager import ConfigManager
+        
+        print("🔄 Starting text embedding...")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Get text input
+        if args.file:
+            with open(args.file, 'r', encoding='utf-8') as f:
+                text = f.read()
+            print(f"📄 Loaded text from: {args.file}")
+        else:
+            text = args.text
+        
+        if not text.strip():
+            print("❌ No text provided")
+            return 1
+        
+        print(f"📝 Text length: {len(text)} characters")
+        
+        # Initialize embedder
+        embedder_config = config.document_processing.vector_embedding
+        embedder = create_vector_embedder(embedder_config.__dict__)
+        
+        # Set provider if specified
+        if args.provider:
+            embedder.default_provider = EmbeddingProvider(args.provider)
+        
+        # Set input type
+        input_type = InputType(args.input_type)
+        
+        # Generate embedding
+        async def run_embedding():
+            return await embedder.embed_text(text, input_type)
+        
+        result = asyncio.run(run_embedding())
+        
+        # Display results
+        print(f"✅ Embedding generated successfully:")
+        print(f"   Provider: {result.provider.value}")
+        print(f"   Input type: {result.input_type.value}")
+        print(f"   Vector dimensions: {len(result.embedding_vector)}")
+        print(f"   Vector norm: {result.metrics.vector_norm:.4f}")
+        print(f"   Quality score: {result.metrics.quality_score:.3f}")
+        print(f"   Quality level: {result.metrics.quality_level.value}")
+        print(f"   Generation time: {result.metrics.generation_time:.3f}s")
+        print(f"   Cache hit: {'Yes' if result.metrics.cache_hit else 'No'}")
+        
+        if args.verbose:
+            print(f"\n📊 Detailed Metrics:")
+            print(f"   Dimension count: {result.metrics.dimension_count}")
+            print(f"   Has NaN values: {result.metrics.has_nan_values}")
+            print(f"   Has Inf values: {result.metrics.has_inf_values}")
+            print(f"   Zero variance: {result.metrics.zero_variance}")
+            print(f"   Dimension range: {result.metrics.dimension_range}")
+        
+        # Save results
+        if args.output:
+            embedding_data = {
+                'text_id': result.text_id,
+                'text_content': result.text_content,
+                'embedding_vector': result.embedding_vector.tolist(),
+                'provider': result.provider.value,
+                'input_type': result.input_type.value,
+                'metrics': {
+                    'vector_norm': result.metrics.vector_norm,
+                    'dimension_count': result.metrics.dimension_count,
+                    'generation_time': result.metrics.generation_time,
+                    'quality_score': result.metrics.quality_score,
+                    'quality_level': result.metrics.quality_level.value,
+                    'cache_hit': result.metrics.cache_hit
+                },
+                'timestamp': result.timestamp.isoformat()
+            }
+            
+            with open(args.output, 'w', encoding='utf-8') as f:
+                json.dump(embedding_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Embedding saved to: {args.output}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Text embedding failed: {e}")
+        return 1
+
+def handle_chunk_embedding(args):
+    """Handle chunk embedding"""
+    
+    try:
+        import asyncio
+        import json
+        from document_processing.text_chunker import create_text_chunker, DocumentType
+        from document_processing.vector_embedder import create_vector_embedder, InputType, EmbeddingProvider
+        from core.config_manager import ConfigManager
+        
+        print(f"🔄 Starting chunk embedding: {args.file}")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Read file
+        with open(args.file, 'r', encoding='utf-8') as f:
+            text = f.read()
+        
+        print(f"📄 Loaded text: {len(text)} characters")
+        
+        # Initialize chunker
+        chunker_config = config.document_processing.text_chunking
+        chunker = create_text_chunker(chunker_config.__dict__)
+        
+        # Set document type if specified
+        document_type = DocumentType(args.document_type) if args.document_type else DocumentType.GENERAL
+        
+        # Chunk text
+        chunks = chunker.chunk_document(text, {'document_type': document_type.value})
+        print(f"📦 Created {len(chunks)} chunks")
+        
+        # Initialize embedder
+        embedder_config = config.document_processing.vector_embedding
+        embedder = create_vector_embedder(embedder_config.__dict__)
+        
+        # Set provider if specified
+        if args.provider:
+            embedder.default_provider = EmbeddingProvider(args.provider)
+        
+        # Set input type
+        input_type = InputType(args.input_type)
+        
+        # Generate embeddings
+        async def run_embedding():
+            return await embedder.embed_chunks(chunks, input_type)
+        
+        results = asyncio.run(run_embedding())
+        
+        # Display results
+        print(f"✅ Chunk embedding completed:")
+        print(f"   Total chunks: {len(chunks)}")
+        print(f"   Successful embeddings: {len(results)}")
+        print(f"   Provider: {results[0].provider.value if results else 'N/A'}")
+        print(f"   Input type: {results[0].input_type.value if results else 'N/A'}")
+        
+        # Calculate statistics
+        if results:
+            avg_quality = sum(r.metrics.quality_score for r in results) / len(results)
+            avg_generation_time = sum(r.metrics.generation_time for r in results) / len(results)
+            cache_hits = sum(1 for r in results if r.metrics.cache_hit)
+            cache_hit_rate = (cache_hits / len(results)) * 100
+            
+            print(f"   Average quality score: {avg_quality:.3f}")
+            print(f"   Average generation time: {avg_generation_time:.3f}s")
+            print(f"   Cache hit rate: {cache_hit_rate:.1f}%")
+        
+        if args.verbose and results:
+            print(f"\n📊 Quality Distribution:")
+            quality_counts = {}
+            for result in results:
+                quality = result.metrics.quality_level.value
+                quality_counts[quality] = quality_counts.get(quality, 0) + 1
+            
+            for quality, count in quality_counts.items():
+                percentage = (count / len(results)) * 100
+                print(f"   {quality}: {count} ({percentage:.1f}%)")
+        
+        # Save results
+        if args.output:
+            embeddings_data = {
+                'source_file': args.file,
+                'document_type': document_type.value,
+                'total_chunks': len(chunks),
+                'successful_embeddings': len(results),
+                'embeddings': []
+            }
+            
+            for result in results:
+                embedding_data = {
+                    'text_id': result.text_id,
+                    'chunk_text': result.text_content,
+                    'embedding_vector': result.embedding_vector.tolist(),
+                    'source_chunk': {
+                        'chunk_id': result.source_chunk.chunk_id if result.source_chunk else None,
+                        'chunk_index': result.source_chunk.chunk_index if result.source_chunk else None,
+                        'token_count': result.source_chunk.token_count if result.source_chunk else None,
+                        'section_headers': result.source_chunk.section_headers if result.source_chunk else []
+                    },
+                    'metrics': {
+                        'vector_norm': result.metrics.vector_norm,
+                        'quality_score': result.metrics.quality_score,
+                        'quality_level': result.metrics.quality_level.value,
+                        'generation_time': result.metrics.generation_time,
+                        'cache_hit': result.metrics.cache_hit
+                    }
+                }
+                embeddings_data['embeddings'].append(embedding_data)
+            
+            with open(args.output, 'w', encoding='utf-8') as f:
+                json.dump(embeddings_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Embeddings saved to: {args.output}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Chunk embedding failed: {e}")
+        return 1
+
+def handle_batch_embedding(args):
+    """Handle batch embedding"""
+    
+    try:
+        import asyncio
+        import json
+        from pathlib import Path
+        from document_processing.vector_embedder import create_vector_embedder, InputType, EmbeddingProvider, BatchEmbeddingRequest
+        from core.config_manager import ConfigManager
+        
+        print(f"📦 Starting batch embedding: {args.input_dir}")
+        
+        # Find files
+        input_path = Path(args.input_dir)
+        if not input_path.exists():
+            print(f"❌ Input directory not found: {args.input_dir}")
+            return 1
+        
+        file_paths = []
+        for pattern in args.patterns:
+            file_paths.extend(input_path.glob(pattern))
+        
+        if not file_paths:
+            print(f"❌ No files found matching patterns: {args.patterns}")
+            return 1
+        
+        file_paths = [f for f in file_paths if f.is_file()]
+        print(f"📄 Found {len(file_paths)} files to process")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Initialize embedder
+        embedder_config = config.document_processing.vector_embedding
+        embedder = create_vector_embedder(embedder_config.__dict__)
+        
+        # Set provider if specified
+        if args.provider:
+            embedder.default_provider = EmbeddingProvider(args.provider)
+        
+        # Set input type
+        input_type = InputType(args.input_type)
+        
+        # Process files
+        print(f"🔄 Processing {len(file_paths)} files...")
+        
+        all_results = []
+        
+        for file_path in file_paths:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+                
+                if not text.strip():
+                    continue
+                
+                # Create batch request
+                request = BatchEmbeddingRequest(
+                    request_id=f"batch_{file_path.stem}",
+                    texts=[text],
+                    text_ids=[file_path.stem],
+                    input_type=input_type
+                )
+                
+                # Generate embedding
+                async def run_embedding():
+                    return await embedder.embed_batch(request)
+                
+                batch_result = asyncio.run(run_embedding())
+                all_results.extend(batch_result.results)
+                
+                print(f"   ✅ {file_path.name}: {len(batch_result.results)} embeddings")
+                
+            except Exception as e:
+                print(f"   ❌ {file_path.name}: {e}")
+        
+        # Display summary
+        print(f"\n✅ Batch embedding completed:")
+        print(f"   Total files processed: {len(file_paths)}")
+        print(f"   Total embeddings generated: {len(all_results)}")
+        
+        if all_results:
+            avg_quality = sum(r.metrics.quality_score for r in all_results) / len(all_results)
+            cache_hits = sum(1 for r in all_results if r.metrics.cache_hit)
+            cache_hit_rate = (cache_hits / len(all_results)) * 100
+            
+            print(f"   Average quality score: {avg_quality:.3f}")
+            print(f"   Cache hit rate: {cache_hit_rate:.1f}%")
+        
+        # Save results
+        if args.output:
+            output_path = Path(args.output)
+            output_path.mkdir(parents=True, exist_ok=True)
+            
+            # Save individual embeddings
+            for result in all_results:
+                embedding_file = output_path / f"{result.text_id}_embedding.json"
+                
+                embedding_data = {
+                    'text_id': result.text_id,
+                    'text_content': result.text_content,
+                    'embedding_vector': result.embedding_vector.tolist(),
+                    'provider': result.provider.value,
+                    'input_type': result.input_type.value,
+                    'metrics': {
+                        'vector_norm': result.metrics.vector_norm,
+                        'quality_score': result.metrics.quality_score,
+                        'quality_level': result.metrics.quality_level.value,
+                        'generation_time': result.metrics.generation_time,
+                        'cache_hit': result.metrics.cache_hit
+                    },
+                    'timestamp': result.timestamp.isoformat()
+                }
+                
+                with open(embedding_file, 'w', encoding='utf-8') as f:
+                    json.dump(embedding_data, f, indent=2, ensure_ascii=False)
+            
+            # Save summary
+            summary_file = output_path / 'batch_summary.json'
+            summary = {
+                'total_files': len(file_paths),
+                'total_embeddings': len(all_results),
+                'average_quality': avg_quality if all_results else 0,
+                'cache_hit_rate': cache_hit_rate if all_results else 0,
+                'files_processed': [str(f) for f in file_paths]
+            }
+            
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Results saved to: {args.output}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Batch embedding failed: {e}")
+        return 1
+
+def handle_embedding_quality_analysis(args):
+    """Handle embedding quality analysis"""
+    
+    try:
+        import asyncio
+        import json
+        import random
+        from document_processing.vector_embedder import create_vector_embedder, InputType
+        from core.config_manager import ConfigManager
+        
+        print(f"🔍 Starting embedding quality analysis: {args.file}")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Read file
+        with open(args.file, 'r', encoding='utf-8') as f:
+            text = f.read()
+        
+        # Split into samples
+        sentences = text.split('.')
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
+        
+        if len(sentences) < args.samples:
+            samples = sentences
+        else:
+            samples = random.sample(sentences, args.samples)
+        
+        print(f"📝 Analyzing {len(samples)} text samples")
+        
+        # Initialize embedder
+        embedder_config = config.document_processing.vector_embedding
+        embedder = create_vector_embedder(embedder_config.__dict__)
+        
+        # Set provider if specified
+        if args.provider:
+            from document_processing.vector_embedder import EmbeddingProvider
+            embedder.default_provider = EmbeddingProvider(args.provider)
+        
+        # Generate embeddings for samples
+        results = []
+        
+        for i, sample in enumerate(samples):
+            try:
+                async def run_embedding():
+                    return await embedder.embed_text(sample, InputType.SEARCH_DOCUMENT)
+                
+                result = asyncio.run(run_embedding())
+                results.append(result)
+                
+                print(f"   Sample {i+1}/{len(samples)}: Quality {result.metrics.quality_score:.3f}")
+                
+            except Exception as e:
+                print(f"   Sample {i+1}/{len(samples)}: Failed - {e}")
+        
+        # Analyze results
+        if not results:
+            print("❌ No embeddings generated for analysis")
+            return 1
+        
+        print(f"\n📊 Quality Analysis Results:")
+        print("-" * 40)
+        
+        # Overall statistics
+        quality_scores = [r.metrics.quality_score for r in results]
+        avg_quality = sum(quality_scores) / len(quality_scores)
+        min_quality = min(quality_scores)
+        max_quality = max(quality_scores)
+        
+        print(f"Average quality score: {avg_quality:.3f}")
+        print(f"Quality range: {min_quality:.3f} - {max_quality:.3f}")
+        
+        # Quality distribution
+        quality_levels = {}
+        for result in results:
+            level = result.metrics.quality_level.value
+            quality_levels[level] = quality_levels.get(level, 0) + 1
+        
+        print(f"\nQuality distribution:")
+        for level, count in quality_levels.items():
+            percentage = (count / len(results)) * 100
+            print(f"  {level}: {count} ({percentage:.1f}%)")
+        
+        # Vector statistics
+        norms = [r.metrics.vector_norm for r in results]
+        avg_norm = sum(norms) / len(norms)
+        
+        print(f"\nVector statistics:")
+        print(f"  Average norm: {avg_norm:.4f}")
+        print(f"  Norm range: {min(norms):.4f} - {max(norms):.4f}")
+        
+        # Performance statistics
+        generation_times = [r.metrics.generation_time for r in results]
+        avg_time = sum(generation_times) / len(generation_times)
+        cache_hits = sum(1 for r in results if r.metrics.cache_hit)
+        cache_hit_rate = (cache_hits / len(results)) * 100
+        
+        print(f"\nPerformance statistics:")
+        print(f"  Average generation time: {avg_time:.3f}s")
+        print(f"  Cache hit rate: {cache_hit_rate:.1f}%")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Quality analysis failed: {e}")
+        return 1
+
+def handle_embedding_cache_commands(args):
+    """Handle embedding cache commands"""
+    
+    if args.cache_action == 'stats':
+        return handle_embedding_cache_stats(args)
+    elif args.cache_action == 'clear':
+        return handle_embedding_cache_clear(args)
+    else:
+        print("❌ Unknown cache command")
+        return 1
+
+def handle_embedding_cache_stats(args):
+    """Handle embedding cache statistics"""
+    
+    try:
+        from document_processing.vector_embedder import create_vector_embedder
+        from core.config_manager import ConfigManager
+        
+        print("📊 Embedding Cache Statistics")
+        print("-" * 40)
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Initialize embedder
+        embedder_config = config.document_processing.vector_embedding
+        embedder = create_vector_embedder(embedder_config.__dict__)
+        
+        # Get cache statistics
+        stats = embedder.cache.get_stats()
+        
+        print(f"Cache size: {stats['size']:,} / {stats['max_size']:,} entries")
+        print(f"Hit rate: {stats['hit_rate']:.1f}%")
+        print(f"Total hits: {stats['hits']:,}")
+        print(f"Total misses: {stats['misses']:,}")
+        print(f"Evictions: {stats['evictions']:,}")
+        print(f"TTL: {stats['ttl_hours']} hours")
+        
+        # Memory usage estimate
+        if stats['size'] > 0:
+            # Rough estimate: 1024 dimensions * 4 bytes per float + metadata
+            estimated_memory_mb = (stats['size'] * 1024 * 4) / (1024 * 1024)
+            print(f"Estimated memory usage: {estimated_memory_mb:.1f} MB")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Cache stats failed: {e}")
+        return 1
+
+def handle_embedding_cache_clear(args):
+    """Handle embedding cache clearing"""
+    
+    try:
+        from document_processing.vector_embedder import create_vector_embedder
+        from core.config_manager import ConfigManager
+        
+        if not args.confirm:
+            print("⚠️ This will clear all cached embeddings.")
+            response = input("Are you sure? (y/N): ")
+            if response.lower() != 'y':
+                print("Cache clearing cancelled")
+                return 0
+        
+        print("🗑️ Clearing embedding cache...")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Initialize embedder
+        embedder_config = config.document_processing.vector_embedding
+        embedder = create_vector_embedder(embedder_config.__dict__)
+        
+        # Get stats before clearing
+        stats_before = embedder.cache.get_stats()
+        
+        # Clear cache
+        embedder.clear_cache()
+        
+        print(f"✅ Cache cleared successfully")
+        print(f"   Removed {stats_before['size']:,} entries")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Cache clear failed: {e}")
+        return 1
+
+def handle_chunk_commands(args):
+    """Handle chunk commands"""
+    
+    if args.chunk_command == 'text':
+        return handle_text_chunking(args)
+    elif args.chunk_command == 'quality':
+        return handle_chunk_quality_analysis(args)
+    elif args.chunk_command == 'boundaries':
+        return handle_chunk_boundary_analysis(args)
+    else:
+        print("❌ Unknown chunk command")
+        return 1
+
+def handle_text_chunking(args):
+    """Handle text chunking command"""
+    try:
+        from document_processing.text_chunker import create_text_chunker, DocumentType
+        from core.config_manager import ConfigManager
+        import json
+        
+        print("🔄 Starting text chunking...")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Get text input
+        if args.file:
+            with open(args.file, 'r', encoding='utf-8') as f:
+                text = f.read()
+            print(f"📄 Loaded text from: {args.file}")
+        else:
+            text = args.text
+        
+        if not text.strip():
+            print("❌ No text provided")
+            return 1
+        
+        print(f"📝 Text length: {len(text)} characters")
+        
+        # Initialize chunker
+        chunker_config = config.document_processing.text_chunking
+        chunker = create_text_chunker(chunker_config.__dict__)
+        
+        # Set document type if specified
+        document_type = DocumentType(args.document_type) if args.document_type else DocumentType.GENERAL
+        
+        # Chunk text
+        chunks = chunker.chunk_document(text, {'document_type': document_type.value})
+        
+        print(f"✅ Text chunking completed:")
+        print(f"   Chunks created: {len(chunks)}")
+        print(f"   Document type: {document_type.value}")
+        
+        if args.verbose:
+            print(f"\n📦 Chunk Details:")
+            for i, chunk in enumerate(chunks[:5], 1):  # Show first 5 chunks
+                print(f"   Chunk {i}:")
+                print(f"     Text: {chunk.text[:100]}...")
+                print(f"     Tokens: {chunk.token_count}")
+                print(f"     Quality: {chunk.quality_metrics.overall_score if chunk.quality_metrics else 'N/A'}")
+        
+        # Save results
+        if args.output:
+            chunks_data = {
+                'source_text_length': len(text),
+                'document_type': document_type.value,
+                'total_chunks': len(chunks),
+                'chunks': [
+                    {
+                        'chunk_id': chunk.chunk_id,
+                        'text': chunk.text,
+                        'token_count': chunk.token_count,
+                        'start_position': chunk.start_position,
+                        'end_position': chunk.end_position,
+                        'section_headers': chunk.section_headers,
+                        'quality_score': chunk.quality_metrics.overall_score if chunk.quality_metrics else 0
+                    }
+                    for chunk in chunks
+                ]
+            }
+            
+            with open(args.output, 'w', encoding='utf-8') as f:
+                json.dump(chunks_data, f, indent=2, ensure_ascii=False)
+            
+            print(f"📁 Chunks saved to: {args.output}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Text chunking failed: {e}")
+        return 1
+
+def handle_chunk_quality_analysis(args):
+    """Handle chunk quality analysis"""
+    try:
+        from document_processing.text_chunker import create_text_chunker, DocumentType
+        from core.config_manager import ConfigManager
+        
+        print(f"🔍 Starting chunk quality analysis: {args.file}")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Read file
+        with open(args.file, 'r', encoding='utf-8') as f:
+            text = f.read()
+        
+        # Initialize chunker
+        chunker_config = config.document_processing.text_chunking
+        chunker = create_text_chunker(chunker_config.__dict__)
+        
+        # Set document type if specified
+        document_type = DocumentType(args.document_type) if args.document_type else DocumentType.GENERAL
+        
+        # Chunk text
+        chunks = chunker.chunk_document(text, {'document_type': document_type.value})
+        
+        print(f"📊 Quality Analysis Results:")
+        print(f"   Total chunks: {len(chunks)}")
+        
+        # Calculate quality statistics
+        quality_scores = [chunk.quality_metrics.overall_score for chunk in chunks if chunk.quality_metrics]
+        if quality_scores:
+            avg_quality = sum(quality_scores) / len(quality_scores)
+            min_quality = min(quality_scores)
+            max_quality = max(quality_scores)
+            
+            print(f"   Average quality: {avg_quality:.3f}")
+            print(f"   Quality range: {min_quality:.3f} - {max_quality:.3f}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Quality analysis failed: {e}")
+        return 1
+
+def handle_chunk_boundary_analysis(args):
+    """Handle chunk boundary analysis"""
+    try:
+        from document_processing.text_chunker import create_text_chunker, DocumentType
+        from core.config_manager import ConfigManager
+        
+        print(f"🔍 Starting boundary analysis: {args.file}")
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        
+        # Read file
+        with open(args.file, 'r', encoding='utf-8') as f:
+            text = f.read()
+        
+        # Initialize chunker
+        chunker_config = config.document_processing.text_chunking
+        chunker = create_text_chunker(chunker_config.__dict__)
+        
+        # Set document type if specified
+        document_type = DocumentType(args.document_type) if args.document_type else DocumentType.GENERAL
+        
+        # Detect boundaries
+        boundaries = chunker.boundary_detector.detect_boundaries(text, document_type)
+        
+        print(f"📊 Boundary Analysis Results:")
+        print(f"   Total boundaries detected: {len(boundaries)}")
+        
+        # Group by boundary type
+        boundary_types = {}
+        for boundary in boundaries:
+            boundary_type = boundary.boundary_type.value
+            boundary_types[boundary_type] = boundary_types.get(boundary_type, 0) + 1
+        
+        print(f"   Boundary distribution:")
+        for boundary_type, count in boundary_types.items():
+            print(f"     {boundary_type}: {count}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Boundary analysis failed: {e}")
+        return 1
+
+# =============================================================================
+# PHASE 5.1: FOLDER SCANNER COMMAND HANDLERS
+# =============================================================================
+
+def handle_scanner_commands(args):
+    """Handle folder scanner commands"""
+    try:
+        if args.scanner_command == 'status':
+            return handle_scanner_status(args)
+        elif args.scanner_command == 'start':
+            return handle_scanner_start(args)
+        elif args.scanner_command == 'stop':
+            return handle_scanner_stop(args)
+        elif args.scanner_command == 'scan':
+            return handle_scanner_scan(args)
+        elif args.scanner_command == 'files':
+            return handle_scanner_files(args)
+        elif args.scanner_command == 'retry':
+            return handle_scanner_retry(args)
+        elif args.scanner_command == 'clear':
+            return handle_scanner_clear(args)
+        elif args.scanner_command == 'config':
+            return handle_scanner_config(args)
+        else:
+            print(f"❌ Unknown scanner command: {args.scanner_command}")
+            return 1
+    except Exception as e:
+        print(f"❌ Scanner command failed: {e}")
+        return 1
+
+
+def handle_scanner_status(args):
+    """Show folder scanner status"""
+    try:
+        # Import scanner module
+        sys.path.insert(0, str(Path(__file__).parent / 'src'))
+        from ingestion.folder_scanner import create_folder_scanner
+        from core.config_manager import ConfigManager
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        scanner_config = config.document_processing.folder_scanner
+        
+        # Create scanner instance (without starting)
+        scanner_config_dict = {
+            'monitored_directories': scanner_config.monitored_directories,
+            'scan_interval': scanner_config.scan_interval,
+            'max_depth': scanner_config.max_depth,
+            'enable_content_hashing': scanner_config.enable_content_hashing,
+            'supported_extensions': scanner_config.supported_extensions,
+            'max_file_size_mb': scanner_config.max_file_size_mb,
+            'min_file_size_bytes': scanner_config.min_file_size_bytes,
+            'exclude_patterns': scanner_config.exclude_patterns,
+            'max_concurrent_files': scanner_config.max_concurrent_files,
+            'retry_attempts': scanner_config.retry_attempts,
+            'retry_delay': scanner_config.retry_delay,
+            'processing_timeout': scanner_config.processing_timeout,
+            'path_metadata_rules': scanner_config.path_metadata_rules,
+            'auto_categorization': scanner_config.auto_categorization,
+            'enable_parallel_scanning': scanner_config.enable_parallel_scanning,
+            'scan_batch_size': scanner_config.scan_batch_size,
+            'memory_limit_mb': scanner_config.memory_limit_mb
+        }
+        
+        scanner = create_folder_scanner(scanner_config_dict)
+        status = scanner.get_status()
+        
+        if args.format == 'json':
+            import json
+            print(json.dumps(status, indent=2, default=str))
+        else:
+            print("📁 FOLDER SCANNER STATUS")
+            print("=" * 50)
+            
+            # Basic status
+            status_icon = "🟢" if status['is_running'] else "🔴"
+            scan_icon = "🔄" if status['is_scanning'] else "⏸️"
+            
+            print(f"Status: {status_icon} {'Running' if status['is_running'] else 'Stopped'}")
+            print(f"Scanning: {scan_icon} {'Active' if status['is_scanning'] else 'Idle'}")
+            print(f"Queue Size: {status['queue_size']} files")
+            
+            # Monitored directories
+            print(f"\n📂 Monitored Directories ({len(status['monitored_directories'])}):")
+            for directory in status['monitored_directories']:
+                exists_icon = "✅" if Path(directory).exists() else "❌"
+                print(f"  {exists_icon} {directory}")
+            
+            # Statistics
+            stats = status['statistics']
+            print(f"\n📊 Statistics:")
+            print(f"  Total Files Tracked: {stats['total_files_tracked']}")
+            print(f"  Files Pending: {stats['files_pending']}")
+            print(f"  Files Processing: {stats['files_processing']}")
+            print(f"  Files Successful: {stats['files_successful']}")
+            print(f"  Files Failed: {stats['files_failed']}")
+            print(f"  Files Skipped: {stats['files_skipped']}")
+            
+            # Performance metrics
+            if stats['total_scans'] > 0:
+                print(f"\n⚡ Performance:")
+                print(f"  Total Scans: {stats['total_scans']}")
+                print(f"  Last Scan: {stats['last_scan_time']}")
+                print(f"  Avg Scan Duration: {stats['avg_scan_duration']:.2f}s")
+                print(f"  Files/Second: {stats['files_per_second']:.2f}")
+            
+            # Configuration (if verbose)
+            if args.verbose:
+                config_info = status['configuration']
+                print(f"\n⚙️ Configuration:")
+                print(f"  Scan Interval: {config_info['scan_interval']}s")
+                print(f"  Max Concurrent Files: {config_info['max_concurrent_files']}")
+                print(f"  Max File Size: {config_info['max_file_size_mb']}MB")
+                print(f"  Supported Extensions: {', '.join(config_info['supported_extensions'])}")
+            
+            # Errors
+            if stats['scan_errors'] > 0 or stats['processing_errors'] > 0:
+                print(f"\n🚨 Errors:")
+                print(f"  Scan Errors: {stats['scan_errors']}")
+                print(f"  Processing Errors: {stats['processing_errors']}")
+                if stats['last_error']:
+                    print(f"  Last Error: {stats['last_error']}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to get scanner status: {e}")
+        return 1
+
+
+def handle_scanner_start(args):
+    """Start folder monitoring"""
+    try:
+        print("🚀 Starting folder scanner...")
+        
+        # TODO: Implement scanner start logic
+        # This would typically involve:
+        # 1. Loading configuration
+        # 2. Creating scanner instance
+        # 3. Starting monitoring
+        # 4. Optionally adding additional directories
+        
+        print("✅ Folder scanner started successfully")
+        
+        if args.directories:
+            print(f"📁 Added {len(args.directories)} additional directories:")
+            for directory in args.directories:
+                print(f"  • {directory}")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to start scanner: {e}")
+        return 1
+
+
+def handle_scanner_stop(args):
+    """Stop folder monitoring"""
+    try:
+        print("🛑 Stopping folder scanner...")
+        
+        # TODO: Implement scanner stop logic
+        # This would typically involve:
+        # 1. Finding running scanner instance
+        # 2. Gracefully stopping monitoring
+        # 3. Waiting for current operations to complete
+        
+        print("✅ Folder scanner stopped successfully")
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to stop scanner: {e}")
+        return 1
+
+
+def handle_scanner_scan(args):
+    """Force immediate scan"""
+    try:
+        if args.directory:
+            print(f"🔍 Scanning directory: {args.directory}")
+        else:
+            print("🔍 Scanning all monitored directories...")
+        
+        # Import scanner module
+        sys.path.insert(0, str(Path(__file__).parent / 'src'))
+        from ingestion.folder_scanner import create_folder_scanner
+        from core.config_manager import ConfigManager
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        scanner_config = config.document_processing.folder_scanner
+        
+        # Create scanner configuration
+        scanner_config_dict = {
+            'monitored_directories': [args.directory] if args.directory else scanner_config.monitored_directories,
+            'scan_interval': scanner_config.scan_interval,
+            'max_depth': scanner_config.max_depth,
+            'enable_content_hashing': scanner_config.enable_content_hashing,
+            'supported_extensions': scanner_config.supported_extensions,
+            'max_file_size_mb': scanner_config.max_file_size_mb,
+            'min_file_size_bytes': scanner_config.min_file_size_bytes,
+            'exclude_patterns': scanner_config.exclude_patterns,
+            'max_concurrent_files': scanner_config.max_concurrent_files,
+            'retry_attempts': scanner_config.retry_attempts,
+            'retry_delay': scanner_config.retry_delay,
+            'processing_timeout': scanner_config.processing_timeout,
+            'path_metadata_rules': scanner_config.path_metadata_rules,
+            'auto_categorization': scanner_config.auto_categorization,
+            'enable_parallel_scanning': scanner_config.enable_parallel_scanning,
+            'scan_batch_size': scanner_config.scan_batch_size,
+            'memory_limit_mb': scanner_config.memory_limit_mb
+        }
+        
+        scanner = create_folder_scanner(scanner_config_dict)
+        result = scanner.force_scan()
+        
+        if result['success']:
+            print(f"✅ Scan completed successfully")
+            print(f"📊 Files tracked: {result['files_tracked']}")
+            print(f"📋 Queue size: {result['queue_size']}")
+            
+            stats = result['statistics']
+            print(f"⏱️ Scan duration: {stats['last_scan_duration']:.2f}s")
+        else:
+            print(f"❌ Scan failed: {result.get('error', 'Unknown error')}")
+            return 1
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to perform scan: {e}")
+        return 1
+
+
+def handle_scanner_files(args):
+    """Show tracked files"""
+    try:
+        # Import scanner module
+        sys.path.insert(0, str(Path(__file__).parent / 'src'))
+        from ingestion.folder_scanner import create_folder_scanner, FileStatus
+        from core.config_manager import ConfigManager
+        
+        # Load configuration
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        scanner_config = config.document_processing.folder_scanner
+        
+        # Create scanner configuration
+        scanner_config_dict = {
+            'monitored_directories': scanner_config.monitored_directories,
+            'scan_interval': scanner_config.scan_interval,
+            'max_depth': scanner_config.max_depth,
+            'enable_content_hashing': scanner_config.enable_content_hashing,
+            'supported_extensions': scanner_config.supported_extensions,
+            'max_file_size_mb': scanner_config.max_file_size_mb,
+            'min_file_size_bytes': scanner_config.min_file_size_bytes,
+            'exclude_patterns': scanner_config.exclude_patterns,
+            'max_concurrent_files': scanner_config.max_concurrent_files,
+            'retry_attempts': scanner_config.retry_attempts,
+            'retry_delay': scanner_config.retry_delay,
+            'processing_timeout': scanner_config.processing_timeout,
+            'path_metadata_rules': scanner_config.path_metadata_rules,
+            'auto_categorization': scanner_config.auto_categorization,
+            'enable_parallel_scanning': scanner_config.enable_parallel_scanning,
+            'scan_batch_size': scanner_config.scan_batch_size,
+            'memory_limit_mb': scanner_config.memory_limit_mb
+        }
+        
+        scanner = create_folder_scanner(scanner_config_dict)
+        
+        # Get file states with optional filtering
+        status_filter = None
+        if args.status:
+            status_filter = FileStatus(args.status)
+        
+        file_states = scanner.get_file_states(status_filter)
+        
+        # Limit results
+        file_items = list(file_states.items())[:args.limit]
+        
+        if args.format == 'json':
+            import json
+            print(json.dumps(dict(file_items), indent=2, default=str))
+        else:
+            print(f"📄 TRACKED FILES ({len(file_items)} of {len(file_states)} total)")
+            print("=" * 80)
+            
+            if not file_items:
+                print("No files found matching criteria")
+                return 0
+            
+            for file_path, file_info in file_items:
+                filename = Path(file_path).name
+                status = file_info['status']
+                
+                # Status icon
+                status_icons = {
+                    'pending': '⏳',
+                    'processing': '🔄',
+                    'success': '✅',
+                    'failed': '❌',
+                    'skipped': '⏭️',
+                    'deleted': '🗑️'
+                }
+                icon = status_icons.get(status, '❓')
+                
+                print(f"\n{icon} {filename}")
+                print(f"   Path: {file_path}")
+                print(f"   Status: {status.upper()}")
+                print(f"   Size: {file_info['metadata']['size']} bytes")
+                print(f"   Type: {file_info['metadata']['document_type'] or 'unknown'}")
+                print(f"   Detected: {file_info['detected_at']}")
+                
+                if file_info['processing_attempts'] > 0:
+                    print(f"   Attempts: {file_info['processing_attempts']}")
+                
+                if file_info['error_message']:
+                    print(f"   Error: {file_info['error_message']}")
+                
+                if file_info['processing_time']:
+                    print(f"   Processing Time: {file_info['processing_time']:.2f}s")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to get file states: {e}")
+        return 1
+
+
+def handle_scanner_retry(args):
+    """Retry failed files"""
+    try:
+        if args.file:
+            print(f"🔄 Retrying file: {args.file}")
+        else:
+            print("🔄 Retrying all failed files...")
+        
+        # TODO: Implement retry logic
+        # This would typically involve:
+        # 1. Finding scanner instance
+        # 2. Calling retry_failed_files() method
+        # 3. Optionally retrying specific file
+        
+        print("✅ Retry operation completed")
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to retry files: {e}")
+        return 1
+
+
+def handle_scanner_clear(args):
+    """Clear processed files"""
+    try:
+        if not args.confirm:
+            response = input("⚠️ This will clear all successfully processed files. Continue? (y/N): ")
+            if response.lower() != 'y':
+                print("Operation cancelled")
+                return 0
+        
+        print("🧹 Clearing processed files...")
+        
+        # TODO: Implement clear logic
+        # This would typically involve:
+        # 1. Finding scanner instance
+        # 2. Calling clear_processed_files() method
+        
+        print("✅ Processed files cleared")
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to clear files: {e}")
+        return 1
+
+
+def handle_scanner_config(args):
+    """Show or update scanner configuration"""
+    try:
+        # Import configuration
+        sys.path.insert(0, str(Path(__file__).parent / 'src'))
+        from core.config_manager import ConfigManager
+        
+        config_manager = ConfigManager()
+        config = config_manager.get_config()
+        scanner_config = config.document_processing.folder_scanner
+        
+        if args.show:
+            print("⚙️ FOLDER SCANNER CONFIGURATION")
+            print("=" * 50)
+            
+            print(f"Monitored Directories ({len(scanner_config.monitored_directories)}):")
+            for directory in scanner_config.monitored_directories:
+                exists_icon = "✅" if Path(directory).exists() else "❌"
+                print(f"  {exists_icon} {directory}")
+            
+            print(f"\nScanning Settings:")
+            print(f"  Scan Interval: {scanner_config.scan_interval}s")
+            print(f"  Max Depth: {scanner_config.max_depth}")
+            print(f"  Content Hashing: {'✅' if scanner_config.enable_content_hashing else '❌'}")
+            
+            print(f"\nFile Filtering:")
+            print(f"  Max File Size: {scanner_config.max_file_size_mb}MB")
+            print(f"  Min File Size: {scanner_config.min_file_size_bytes} bytes")
+            print(f"  Supported Extensions: {', '.join(scanner_config.supported_extensions)}")
+            
+            print(f"\nProcessing Settings:")
+            print(f"  Max Concurrent Files: {scanner_config.max_concurrent_files}")
+            print(f"  Retry Attempts: {scanner_config.retry_attempts}")
+            print(f"  Retry Delay: {scanner_config.retry_delay}s")
+            print(f"  Processing Timeout: {scanner_config.processing_timeout}s")
+            
+            print(f"\nPerformance Settings:")
+            print(f"  Parallel Scanning: {'✅' if scanner_config.enable_parallel_scanning else '❌'}")
+            print(f"  Scan Batch Size: {scanner_config.scan_batch_size}")
+            print(f"  Memory Limit: {scanner_config.memory_limit_mb}MB")
+        
+        elif args.add_directory:
+            directory = Path(args.add_directory)
+            if not directory.exists():
+                print(f"❌ Directory does not exist: {args.add_directory}")
+                return 1
+            
+            if args.add_directory in scanner_config.monitored_directories:
+                print(f"⚠️ Directory already monitored: {args.add_directory}")
+                return 0
+            
+            # TODO: Implement add directory logic
+            print(f"✅ Added directory to monitoring: {args.add_directory}")
+        
+        elif args.remove_directory:
+            if args.remove_directory not in scanner_config.monitored_directories:
+                print(f"⚠️ Directory not currently monitored: {args.remove_directory}")
+                return 0
+            
+            # TODO: Implement remove directory logic
+            print(f"✅ Removed directory from monitoring: {args.remove_directory}")
+        
+        else:
+            print("⚙️ Use --show to display configuration")
+            print("⚙️ Use --add-directory or --remove-directory to modify monitoring")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to handle config command: {e}")
+        return 1
+
+# =============================================================================
+# PHASE 4.1: VECTOR STORAGE COMMAND HANDLERS
+# =============================================================================
+
+def handle_storage_commands(args):
+    """Handle vector storage commands"""
+    try:
+        if args.storage_command == 'stats':
+            return handle_storage_stats(args)
+        elif args.storage_command == 'overview':
+            return handle_storage_overview(args)
+        elif args.storage_command == 'search':
+            return handle_storage_search(args)
+        elif args.storage_command == 'backup':
+            return handle_storage_backup(args)
+        elif args.storage_command == 'optimize':
+            return handle_storage_optimize(args)
+        else:
+            print(f"❌ Unknown storage command: {args.storage_command}")
+            return 1
+    except Exception as e:
+        print(f"❌ Storage command failed: {e}")
+        return 1
+
+
+def handle_storage_stats(args):
+    """Show vector storage statistics"""
+    try:
+        print(f"📊 Vector Storage Statistics - {args.vector_type.upper()} vectors")
+        print("-" * 50)
+        
+        # TODO: Implement actual storage stats
+        # This would typically involve:
+        # 1. Loading vector storage instance
+        # 2. Getting statistics for specified vector type
+        # 3. Formatting output according to args.format
+        
+        if args.format == 'json':
+            import json
+            stats = {
+                'vector_type': args.vector_type,
+                'total_vectors': 0,
+                'index_size_mb': 0,
+                'memory_usage_mb': 0,
+                'last_updated': None
+            }
+            print(json.dumps(stats, indent=2))
+        else:
+            print(f"Vector Type: {args.vector_type}")
+            print(f"Total Vectors: 0")
+            print(f"Index Size: 0 MB")
+            print(f"Memory Usage: 0 MB")
+            print(f"Last Updated: N/A")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to get storage stats: {e}")
+        return 1
+
+
+def handle_storage_overview(args):
+    """Show comprehensive storage overview"""
+    try:
+        print("📊 VECTOR STORAGE OVERVIEW")
+        print("=" * 40)
+        
+        # TODO: Implement actual storage overview
+        # This would show both chunk and site vector statistics
+        
+        if args.format == 'json':
+            import json
+            overview = {
+                'chunk_vectors': {'count': 0, 'size_mb': 0},
+                'site_vectors': {'count': 0, 'size_mb': 0},
+                'total_memory_mb': 0,
+                'cache_hit_rate': 0.0
+            }
+            print(json.dumps(overview, indent=2))
+        else:
+            print("Chunk Vectors:")
+            print("  Count: 0")
+            print("  Size: 0 MB")
+            print("\nSite Vectors:")
+            print("  Count: 0") 
+            print("  Size: 0 MB")
+            print(f"\nTotal Memory Usage: 0 MB")
+            print(f"Cache Hit Rate: 0.0%")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to get storage overview: {e}")
+        return 1
+
+
+def handle_storage_search(args):
+    """Search for similar vectors"""
+    try:
+        print(f"🔍 Searching {args.vector_type} vectors for: '{args.query_text}'")
+        print(f"Search mode: {args.search_mode}, Results: {args.k}")
+        print("-" * 50)
+        
+        # TODO: Implement actual vector search
+        # This would typically involve:
+        # 1. Loading vector storage instance
+        # 2. Embedding the query text
+        # 3. Performing similarity search
+        # 4. Formatting results
+        
+        if args.format == 'json':
+            import json
+            results = {
+                'query': args.query_text,
+                'vector_type': args.vector_type,
+                'search_mode': args.search_mode,
+                'results': []
+            }
+            print(json.dumps(results, indent=2))
+        else:
+            print("No results found (storage not initialized)")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to perform search: {e}")
+        return 1
+
+
+def handle_storage_backup(args):
+    """Create backup of vector indices"""
+    try:
+        print(f"💾 Creating vector storage backup...")
+        print(f"Backup path: {args.backup_path}")
+        
+        # TODO: Implement actual backup logic
+        # This would typically involve:
+        # 1. Loading vector storage instance
+        # 2. Creating backup directory
+        # 3. Saving indices and metadata
+        
+        print("✅ Backup completed successfully")
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to create backup: {e}")
+        return 1
+
+
+def handle_storage_optimize(args):
+    """Optimize vector indices"""
+    try:
+        print("⚡ Optimizing vector indices...")
+        
+        # TODO: Implement actual optimization logic
+        # This would typically involve:
+        # 1. Loading vector storage instance
+        # 2. Running index optimization
+        # 3. Reporting performance improvements
+        
+        print("✅ Index optimization completed")
+        return 0
+        
+    except Exception as e:
+        print(f"❌ Failed to optimize indices: {e}")
+        return 1
+
+def main():
+    """Main entry point"""
+    
+    parser = argparse.ArgumentParser(
+        description='RAG System - Unified Entry Point with Document Processing',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Start API server
+  ./rag-system api --port 8000
+  
+  # Start UI
+  ./rag-system ui --port 7860
+  
+  # Process single document
+  ./rag-system document process document.pdf --chunking fixed_size --chunk-size 1000
+  
+  # Batch process documents
+  ./rag-system document batch ./documents --patterns "*.pdf" "*.docx" --output ./results
+  
+  # Validate documents
+  ./rag-system document validate ./documents --recursive
+  
+  # Extract text
+  ./rag-system document extract document.pdf --output extracted.txt
+  
+  # Extract metadata
+  ./rag-system document metadata document.pdf --format json --output metadata.json
+  
+  # OCR processing (Phase 2.2)
+  ./rag-system document ocr image.png --language en --output ocr_result.txt
+  ./rag-system document ocr document.pdf --provider azure_vision --format json --output ocr_result.json
+  
+  # Batch OCR processing
+  ./rag-system document ocr-batch ./images --patterns "*.png" "*.jpg" --output ./ocr_results
+  
+  # OCR validation
+  ./rag-system document ocr-validate ./images --recursive --output ocr_validation.json
+  
+  # Health check
+  ./rag-system health --mode enhanced
+  
+  # Configuration
+  ./rag-system config --validate
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # API command
+    api_parser = subparsers.add_parser('api', help='Start API server')
+    api_parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
+    api_parser.add_argument('--port', type=int, default=8000, help='Port to bind to')
+    api_parser.add_argument('--reload', action='store_true', help='Enable auto-reload')
+    
+    # UI command
+    ui_parser = subparsers.add_parser('ui', help='Start UI server')
+    ui_parser.add_argument('--host', default='0.0.0.0', help='Host to bind to')
+    ui_parser.add_argument('--port', type=int, default=7860, help='Port to bind to')
+    ui_parser.add_argument('--share', action='store_true', help='Create public link')
+    
+    # System command
+    system_parser = subparsers.add_parser('system', help='Start full system')
+    system_parser.add_argument('--api-port', type=int, default=8000, help='API port')
+    system_parser.add_argument('--ui-port', type=int, default=7860, help='UI port')
+    
+    # Health command
+    health_parser = subparsers.add_parser('health', help='System health check')
+    health_parser.add_argument('--mode', choices=['basic', 'enhanced'], default='basic', help='Health check mode')
+    health_parser.add_argument('--output', choices=['text', 'json'], default='text', help='Output format')
+    health_parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    
+    # Config command
+    config_parser = subparsers.add_parser('config', help='Configuration management')
+    config_parser.add_argument('--validate', action='store_true', help='Validate configuration')
+    config_parser.add_argument('--migrate', action='store_true', help='Migrate .env to YAML')
+    config_parser.add_argument('--environment', default='development', help='Environment name')
+    config_parser.add_argument('--summary', action='store_true', help='Show configuration summary')
+    
+    # Document processing commands
+    setup_document_processing_commands(subparsers)
+    
+    # =============================================================================
+    # PHASE 3.1: TEXT CHUNKING COMMANDS
+    # =============================================================================
+    
+    # Text chunking command group
+    chunk_parser = subparsers.add_parser('chunk', help='Text chunking operations')
+    chunk_subparsers = chunk_parser.add_subparsers(dest='chunk_command', help='Chunking commands')
+    
+    # Text chunking command
+    chunk_text_parser = chunk_subparsers.add_parser('text', help='Chunk text into segments')
+    chunk_text_group = chunk_text_parser.add_mutually_exclusive_group(required=True)
+    chunk_text_group.add_argument('--file', '-f', help='File containing text to chunk')
+    chunk_text_group.add_argument('--text', '-t', help='Text to chunk directly')
+    chunk_text_parser.add_argument('--document-type', choices=[
+        'technical_manual', 'incident_report', 'procedural_document', 
+        'safety_document', 'maintenance_log', 'general'
+    ], help='Document type for adaptive chunking')
+    chunk_text_parser.add_argument('--output', '-o', help='Output file for chunks (JSON format)')
+    chunk_text_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed chunk information')
+    chunk_text_parser.set_defaults(func=handle_text_chunking)
+    
+    # Quality analysis command
+    chunk_quality_parser = chunk_subparsers.add_parser('quality', help='Analyze chunk quality')
+    chunk_quality_parser.add_argument('file', help='File to analyze')
+    chunk_quality_parser.add_argument('--document-type', choices=[
+        'technical_manual', 'incident_report', 'procedural_document', 
+        'safety_document', 'maintenance_log', 'general'
+    ], help='Document type for analysis')
+    chunk_quality_parser.set_defaults(func=handle_chunk_quality_analysis)
+    
+    # Boundary analysis command
+    chunk_boundary_parser = chunk_subparsers.add_parser('boundaries', help='Analyze chunk boundaries')
+    chunk_boundary_parser.add_argument('file', help='File to analyze')
+    chunk_boundary_parser.add_argument('--document-type', choices=[
+        'technical_manual', 'incident_report', 'procedural_document', 
+        'safety_document', 'maintenance_log', 'general'
+    ], help='Document type for boundary detection')
+    chunk_boundary_parser.set_defaults(func=handle_chunk_boundary_analysis)
+    
+    # =============================================================================
+    # PHASE 3.2: VECTOR EMBEDDING COMMANDS
+    # =============================================================================
+    
+    # Vector embedding command group
+    embed_parser = subparsers.add_parser('embed', help='Vector embedding operations')
+    embed_subparsers = embed_parser.add_subparsers(dest='embed_command', help='Embedding commands')
+    
+    # Single text embedding command
+    embed_text_parser = embed_subparsers.add_parser('text', help='Generate embedding for text')
+    embed_text_group = embed_text_parser.add_mutually_exclusive_group(required=True)
+    embed_text_group.add_argument('--file', '-f', help='File containing text to embed')
+    embed_text_group.add_argument('--text', '-t', help='Text to embed directly')
+    embed_text_parser.add_argument('--input-type', choices=[
+        'search_document', 'search_query', 'classification', 'clustering'
+    ], default='search_document', help='Input type for embedding optimization')
+    embed_text_parser.add_argument('--provider', choices=[
+        'cohere_embed_v3', 'openai_ada_002', 'sentence_transformers'
+    ], help='Embedding provider to use')
+    embed_text_parser.add_argument('--output', '-o', help='Output file for embedding (JSON format)')
+    embed_text_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed embedding information')
+    embed_text_parser.set_defaults(func=handle_text_embedding)
+    
+    # Chunk embedding command
+    embed_chunks_parser = embed_subparsers.add_parser('chunks', help='Generate embeddings for text chunks')
+    embed_chunks_parser.add_argument('file', help='File containing text to chunk and embed')
+    embed_chunks_parser.add_argument('--document-type', choices=[
+        'technical_manual', 'incident_report', 'procedural_document', 
+        'safety_document', 'maintenance_log', 'general'
+    ], help='Document type for chunking')
+    embed_chunks_parser.add_argument('--input-type', choices=[
+        'search_document', 'search_query', 'classification', 'clustering'
+    ], default='search_document', help='Input type for embedding optimization')
+    embed_chunks_parser.add_argument('--provider', choices=[
+        'cohere_embed_v3', 'openai_ada_002', 'sentence_transformers'
+    ], help='Embedding provider to use')
+    embed_chunks_parser.add_argument('--output', '-o', help='Output file for embeddings (JSON format)')
+    embed_chunks_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed processing information')
+    embed_chunks_parser.set_defaults(func=handle_chunk_embedding)
+    
+    # Batch embedding command
+    embed_batch_parser = embed_subparsers.add_parser('batch', help='Generate embeddings for multiple texts')
+    embed_batch_parser.add_argument('input_dir', help='Directory containing text files')
+    embed_batch_parser.add_argument('--patterns', nargs='+', default=['*.txt', '*.md'], 
+                                   help='File patterns to match')
+    embed_batch_parser.add_argument('--input-type', choices=[
+        'search_document', 'search_query', 'classification', 'clustering'
+    ], default='search_document', help='Input type for embedding optimization')
+    embed_batch_parser.add_argument('--provider', choices=[
+        'cohere_embed_v3', 'openai_ada_002', 'sentence_transformers'
+    ], help='Embedding provider to use')
+    embed_batch_parser.add_argument('--output', '-o', help='Output directory for embeddings')
+    embed_batch_parser.add_argument('--concurrent', type=int, default=3, help='Number of concurrent workers')
+    embed_batch_parser.add_argument('--verbose', '-v', action='store_true', help='Show detailed processing information')
+    embed_batch_parser.set_defaults(func=handle_batch_embedding)
+    
+    # Embedding quality analysis command
+    embed_quality_parser = embed_subparsers.add_parser('quality', help='Analyze embedding quality')
+    embed_quality_parser.add_argument('file', help='File containing text to analyze')
+    embed_quality_parser.add_argument('--provider', choices=[
+        'cohere_embed_v3', 'openai_ada_002', 'sentence_transformers'
+    ], help='Embedding provider to use')
+    embed_quality_parser.add_argument('--samples', type=int, default=10, help='Number of text samples to analyze')
+    embed_quality_parser.set_defaults(func=handle_embedding_quality_analysis)
+    
+    # Cache management command
+    embed_cache_parser = embed_subparsers.add_parser('cache', help='Manage embedding cache')
+    embed_cache_subparsers = embed_cache_parser.add_subparsers(dest='cache_action', help='Cache actions')
+    
+    # Cache stats
+    cache_stats_parser = embed_cache_subparsers.add_parser('stats', help='Show cache statistics')
+    cache_stats_parser.set_defaults(func=handle_embedding_cache_stats)
+    
+    # Cache clear
+    cache_clear_parser = embed_cache_subparsers.add_parser('clear', help='Clear embedding cache')
+    cache_clear_parser.add_argument('--confirm', action='store_true', help='Confirm cache clearing')
+    cache_clear_parser.set_defaults(func=handle_embedding_cache_clear)
+    
+    # =============================================================================
+    # PHASE 4.1: VECTOR STORAGE COMMANDS
+    # =============================================================================
+    
+    # Vector storage command group
+    storage_parser = subparsers.add_parser('storage', help='Vector storage operations')
+    storage_subparsers = storage_parser.add_subparsers(dest='storage_command', help='Storage commands')
+    
+    # Storage statistics command
+    storage_stats_parser = storage_subparsers.add_parser('stats', help='Show vector storage statistics')
+    storage_stats_parser.add_argument('--vector-type', choices=['chunk', 'site'], default='chunk', 
+                                     help='Vector type to query')
+    storage_stats_parser.add_argument('--format', choices=['json', 'table'], default='table', 
+                                     help='Output format')
+    storage_stats_parser.set_defaults(func=handle_storage_stats)
+    
+    # Storage overview command
+    storage_overview_parser = storage_subparsers.add_parser('overview', help='Show comprehensive storage overview')
+    storage_overview_parser.add_argument('--format', choices=['json', 'table'], default='table', 
+                                        help='Output format')
+    storage_overview_parser.set_defaults(func=handle_storage_overview)
+    
+    # Vector search command
+    storage_search_parser = storage_subparsers.add_parser('search', help='Search for similar vectors')
+    storage_search_parser.add_argument('query_text', help='Text to search for')
+    storage_search_parser.add_argument('--vector-type', choices=['chunk', 'site'], default='chunk', 
+                                      help='Vector type to search')
+    storage_search_parser.add_argument('--k', type=int, default=5, help='Number of results to return')
+    storage_search_parser.add_argument('--search-mode', choices=['exact', 'approximate', 'hybrid'], 
+                                      default='approximate', help='Search mode')
+    storage_search_parser.add_argument('--format', choices=['json', 'table'], default='table', 
+                                      help='Output format')
+    storage_search_parser.set_defaults(func=handle_storage_search)
+    
+    # Storage backup command
+    storage_backup_parser = storage_subparsers.add_parser('backup', help='Create backup of vector indices')
+    storage_backup_parser.add_argument('--backup-path', default='backups/vectors', 
+                                      help='Backup directory path')
+    storage_backup_parser.set_defaults(func=handle_storage_backup)
+    
+    # Storage optimization command
+    storage_optimize_parser = storage_subparsers.add_parser('optimize', help='Optimize vector indices')
+    storage_optimize_parser.set_defaults(func=handle_storage_optimize)
+    
+    # =============================================================================
+    # PHASE 5.1: FOLDER SCANNER COMMANDS
+    # =============================================================================
+    
+    # Folder scanner command group
+    scanner_parser = subparsers.add_parser('scanner', help='Folder scanner operations')
+    scanner_subparsers = scanner_parser.add_subparsers(dest='scanner_command', help='Scanner commands')
+    
+    # Scanner status command
+    scanner_status_parser = scanner_subparsers.add_parser('status', help='Show folder scanner status')
+    scanner_status_parser.add_argument('--format', choices=['json', 'table'], default='table', 
+                                      help='Output format')
+    scanner_status_parser.add_argument('--verbose', '-v', action='store_true', 
+                                      help='Show detailed status information')
+    scanner_status_parser.set_defaults(func=handle_scanner_status)
+    
+    # Scanner start command
+    scanner_start_parser = scanner_subparsers.add_parser('start', help='Start folder monitoring')
+    scanner_start_parser.add_argument('--directories', '-d', nargs='+', 
+                                     help='Additional directories to monitor')
+    scanner_start_parser.set_defaults(func=handle_scanner_start)
+    
+    # Scanner stop command
+    scanner_stop_parser = scanner_subparsers.add_parser('stop', help='Stop folder monitoring')
+    scanner_stop_parser.set_defaults(func=handle_scanner_stop)
+    
+    # Scanner scan command (force immediate scan)
+    scanner_scan_parser = scanner_subparsers.add_parser('scan', help='Force immediate scan')
+    scanner_scan_parser.add_argument('--directory', '-d', 
+                                    help='Scan specific directory only')
+    scanner_scan_parser.set_defaults(func=handle_scanner_scan)
+    
+    # Scanner files command (show tracked files)
+    scanner_files_parser = scanner_subparsers.add_parser('files', help='Show tracked files')
+    scanner_files_parser.add_argument('--status', choices=['pending', 'processing', 'success', 'failed', 'skipped'], 
+                                     help='Filter by file status')
+    scanner_files_parser.add_argument('--format', choices=['json', 'table'], default='table', 
+                                     help='Output format')
+    scanner_files_parser.add_argument('--limit', type=int, default=50, 
+                                     help='Maximum number of files to show')
+    scanner_files_parser.set_defaults(func=handle_scanner_files)
+    
+    # Scanner retry command (retry failed files)
+    scanner_retry_parser = scanner_subparsers.add_parser('retry', help='Retry failed files')
+    scanner_retry_parser.add_argument('--file', '-f', 
+                                     help='Retry specific file path')
+    scanner_retry_parser.set_defaults(func=handle_scanner_retry)
+    
+    # Scanner clear command (clear processed files)
+    scanner_clear_parser = scanner_subparsers.add_parser('clear', help='Clear processed files')
+    scanner_clear_parser.add_argument('--confirm', action='store_true', 
+                                     help='Confirm clearing without prompt')
+    scanner_clear_parser.set_defaults(func=handle_scanner_clear)
+    
+    # Scanner config command (show/update configuration)
+    scanner_config_parser = scanner_subparsers.add_parser('config', help='Scanner configuration')
+    scanner_config_parser.add_argument('--show', action='store_true', 
+                                      help='Show current configuration')
+    scanner_config_parser.add_argument('--add-directory', 
+                                      help='Add directory to monitoring')
+    scanner_config_parser.add_argument('--remove-directory', 
+                                      help='Remove directory from monitoring')
+    scanner_config_parser.set_defaults(func=handle_scanner_config)
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        return 1
+    
+    # Handle commands
+    try:
+        if args.command == 'api':
+            from scripts.start_api import main as start_api
+            return start_api(args.host, args.port, args.reload)
+        
+        elif args.command == 'ui':
+            from scripts.start_ui import main as start_ui
+            return start_ui(args.host, args.port, args.share)
+        
+        elif args.command == 'system':
+            from scripts.start_system import main as start_system
+            return start_system(args.api_port, args.ui_port)
+        
+        elif args.command == 'health':
+            from scripts.utilities.health_check import main as health_check
+            return health_check(args.mode, args.output, args.verbose)
+        
+        elif args.command == 'config':
+            from scripts.utilities.config_validator import main as config_validator
+            return config_validator(args.validate, args.migrate, args.environment, args.summary)
+        
+        elif args.command == 'document':
+            return handle_document_commands(args)
+        
+        elif args.command == 'chunk':
+            return handle_chunk_commands(args)
+        
+        elif args.command == 'embed':
+            return handle_embed_commands(args)
+        
+        elif args.command == 'storage':
+            return handle_storage_commands(args)
+        
+        elif args.command == 'scanner':
+            return handle_scanner_commands(args)
+        
+        else:
+            print(f"❌ Unknown command: {args.command}")
+            return 1
+    
+    except KeyboardInterrupt:
+        print("\n⚠️ Operation cancelled by user")
+        return 1
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main()) 

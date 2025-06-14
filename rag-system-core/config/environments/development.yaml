@@ -1,0 +1,431 @@
+# RAG System - Development Environment Configuration
+# Generated from .env file on The current date is: Thu 06/12/2025 
+Enter the new date: (mm-dd-yy) The system cannot accept the date entered.
+Enter the new date: (mm-dd-yy)
+
+api:
+  api_key: ${RAG_API_KEY}
+  cors_origins:
+  - '*'
+  host: ${RAG_API_HOST:-0.0.0.0}
+  port: ${RAG_API_PORT:-8000}
+azure:
+  chat_api_key: ${AZURE_CHATAPI_KEY}
+  chat_endpoint: ${AZURE_CHAT_ENDPOINT}
+  chat_model: ${CHAT_MODEL}
+  computer_vision_endpoint: ${AZURE_COMPUTER_VISION_ENDPOINT}
+  computer_vision_key: ${AZURE_COMPUTER_VISION_KEY}
+  embedding_model: ${EMBEDDING_MODEL}
+  embeddings_endpoint: ${AZURE_EMBEDDINGS_ENDPOINT}
+  embeddings_key: ${AZURE_EMBEDDINGS_KEY}
+  foundry:
+    enabled: true
+    workspace_name: azurehub1910875317
+  vision:
+    api_version: '2024-02-01'
+    enabled: true
+data_dir: data
+debug: true
+embedding:
+  azure:
+    api_key: ${AZURE_EMBEDDINGS_KEY}
+    endpoint: ${AZURE_EMBEDDINGS_ENDPOINT}
+    model_name: ${EMBEDDING_MODEL}
+  provider: sentence-transformers
+  sentence_transformers:
+    dimension: 384
+    model_name: sentence-transformers/all-MiniLM-L6-v2
+environment: development
+llm:
+  azure_llm:
+    api_key: ${AZURE_CHATAPI_KEY}
+    endpoint: ${AZURE_CHAT_ENDPOINT}
+    model_name: ${CHAT_MODEL}
+  groq:
+    api_key: ${GROQ_API_KEY}
+    model_name: meta-llama/llama-4-maverick-17b-128e-instruct
+  provider: groq
+log_dir: logs
+servicenow:
+  enabled: ${SERVICENOW_SYNC_ENABLED:-true}
+  instance: ${SERVICENOW_INSTANCE}
+  password: ${SERVICENOW_PASSWORD}
+  sync:
+    interval_minutes: ${SERVICENOW_SYNC_INTERVAL:-120}
+    max_records: ${SERVICENOW_MAX_RECORDS:-1000}
+  username: ${SERVICENOW_USERNAME}
+
+# ===== LOGGING CONFIGURATION =====
+logging:
+  log_level: "DEBUG"
+  log_format: "json"
+  log_dir: "logs"
+  environment: "development"
+  console_output: true
+  file_output: true
+  structured_logging: true
+  log_rotation:
+    max_size_mb: 10
+    backup_count: 5
+  error_log:
+    max_size_mb: 20
+    backup_count: 10
+
+# ===== MONITORING CONFIGURATION =====
+monitoring:
+  enabled: true
+  metrics_retention_hours: 24
+  health_check_interval_seconds: 60
+  performance_monitoring: true
+  error_tracking: true
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 5
+    recovery_timeout_seconds: 60
+
+# ===== DOCUMENT PROCESSING CONFIGURATION =====
+document_processing:
+  # Phase 2.1: Document Processing Pipeline Enhancement
+  text_extraction:
+    pdf_strategy: "pypdf2"  # pypdf2, pdfplumber, pymupdf
+    docx_strategy: "python-docx"
+    fallback_enabled: true
+    max_file_size_mb: 50
+    timeout_seconds: 30
+  
+  metadata_extraction:
+    extract_creation_date: true
+    extract_modification_date: true
+    extract_author: true
+    extract_title: true
+    extract_subject: true
+    extract_keywords: true
+    custom_fields: []
+  
+  chunking:
+    default_strategy: "fixed_size"
+    chunk_size: 1000
+    chunk_overlap: 200
+    min_chunk_size: 100
+    max_chunk_size: 2000
+    enable_semantic_chunking: false
+  
+  # Phase 2.2: OCR Processing Module
+  ocr:
+    providers:
+      azure_vision:
+        enabled: true
+        endpoint: "${AZURE_VISION_ENDPOINT}"
+        api_key: "${AZURE_VISION_API_KEY}"
+        api_version: "2023-02-01-preview"
+        timeout: 30
+        max_retries: 3
+        confidence_threshold: 0.7
+        language_hints: ["en"]
+      
+      llama_maverick:
+        enabled: false
+        endpoint: "${LLAMA_MAVERICK_ENDPOINT}"
+        api_key: "${LLAMA_MAVERICK_API_KEY}"
+        timeout: 45
+        max_retries: 2
+        confidence_threshold: 0.6
+    
+    image_preprocessing:
+      enabled: true
+      enhance_contrast: true
+      enhance_sharpness: true
+      reduce_noise: true
+      resize_for_ocr: true
+      max_image_size: 4096
+    
+    caching:
+      enabled: true
+      cache_duration_hours: 24
+      max_cache_size_mb: 500
+  
+  # Phase 2.3: Document Classification Module
+  classification:
+    enabled: true
+    confidence_threshold: 0.7
+    max_categories: 5
+    
+    categories:
+      - name: "technical_manual"
+        keywords: ["procedure", "instruction", "manual", "guide", "specification"]
+        weight: 1.0
+      - name: "safety_document"
+        keywords: ["safety", "hazard", "warning", "caution", "emergency", "ppe"]
+        weight: 1.2
+      - name: "incident_report"
+        keywords: ["incident", "accident", "report", "investigation", "root cause"]
+        weight: 1.1
+      - name: "maintenance_log"
+        keywords: ["maintenance", "repair", "service", "inspection", "calibration"]
+        weight: 1.0
+      - name: "general"
+        keywords: []
+        weight: 0.5
+    
+    rules:
+      - name: "safety_priority"
+        condition: "contains_safety_keywords"
+        action: "boost_safety_category"
+        boost_factor: 1.5
+      - name: "procedure_detection"
+        condition: "numbered_steps_present"
+        action: "boost_technical_category"
+        boost_factor: 1.3
+  
+  # Phase 3.1: Text Chunking Module
+  text_chunking:
+    # Chunking strategy configuration
+    strategy: "document_aware"  # fixed_size, semantic, sentence, hierarchical, document_aware
+    
+    # Size parameters (in tokens)
+    target_size: 1000
+    max_size: 1500
+    min_size: 200
+    overlap_size: 200
+    
+    # Token counting
+    model_name: "gpt-3.5-turbo"  # For accurate token counting
+    
+    # Quality assessment
+    min_quality_score: 0.6
+    optimal_size_range: [800, 1200]
+    
+    # Boundary detection
+    boundary_detection:
+      section_headers:
+        enabled: true
+        confidence_weight: 0.9
+        patterns:
+          - "^#{1,6}\\s+.+$"  # Markdown headers
+          - "^\\d+\\.\\s+[A-Z][^.]*$"  # Numbered sections
+          - "^[A-Z][A-Z\\s]+:?\\s*$"  # ALL CAPS headers
+          - "^Chapter\\s+\\d+"
+          - "^Section\\s+\\d+"
+          - "^Part\\s+[IVX]+"
+      
+      paragraphs:
+        enabled: true
+        confidence_weight: 0.7
+        patterns:
+          - "\\n\\s*\\n"  # Double newlines
+          - "\\n\\s*[-•*]\\s+"  # Bullet points
+          - "\\n\\s*\\d+\\.\\s+"  # Numbered lists
+      
+      sentences:
+        enabled: true
+        confidence_weight: 0.5
+        patterns:
+          - "[.!?]+\\s+[A-Z]"  # Sentence endings
+          - "[.!?]+\\s*\\n"  # Sentence endings with newlines
+      
+      structures:
+        enabled: true
+        confidence_weight: 0.8
+        table_patterns:
+          - "\\n\\s*\\|.*\\|\\s*\\n"  # Markdown tables
+          - "\\n\\s*\\+[-+]+\\+\\s*\\n"  # ASCII tables
+    
+    # Document type adaptation
+    document_type_rules:
+      technical_manual:
+        prioritize_boundaries: ["section_header", "paragraph"]
+        ignore_boundaries: []
+        boost_structure_score: 1.2
+      
+      procedural_document:
+        prioritize_boundaries: ["section_header", "paragraph", "list"]
+        ignore_boundaries: ["sentence"]
+        boost_structure_score: 1.3
+      
+      safety_document:
+        prioritize_boundaries: ["section_header", "paragraph"]
+        ignore_boundaries: []
+        boost_completeness_score: 1.2
+      
+      incident_report:
+        prioritize_boundaries: ["paragraph", "sentence"]
+        ignore_boundaries: []
+        boost_coherence_score: 1.1
+      
+      maintenance_log:
+        prioritize_boundaries: ["paragraph", "list"]
+        ignore_boundaries: []
+        boost_structure_score: 1.1
+      
+      general:
+        prioritize_boundaries: ["paragraph", "sentence"]
+        ignore_boundaries: []
+        boost_coherence_score: 1.0
+    
+    # Performance and caching
+    caching:
+      enabled: true
+      max_cache_size: 1000  # Number of documents to cache
+      cache_ttl_hours: 24
+    
+    # Quality metrics weights
+    quality_weights:
+      completeness: 0.3
+      coherence: 0.3
+      structure: 0.2
+      size: 0.2
+    
+    # Processing limits
+    max_concurrent_chunks: 10
+    processing_timeout_seconds: 60
+
+  # Phase 3.2: Vector Embedding Configuration
+  vector_embedding:
+    # Provider configuration
+    default_provider: "cohere_embed_v3"
+    batch_size: 32
+    max_concurrent_batches: 5
+    enable_caching: true
+    
+    # Cohere Embed v3 Configuration
+    cohere:
+      enabled: true
+      api_key: "${COHERE_API_KEY}"
+      api_endpoint: "https://api.cohere.ai/v1/embed"
+      model_name: "embed-english-v3.0"
+      max_batch_size: 96
+      timeout: 30
+      max_retries: 3
+      requests_per_minute: 100
+    
+    # Alternative providers (for future expansion)
+    openai:
+      enabled: false
+      api_key: "${OPENAI_API_KEY}"
+      model_name: "text-embedding-ada-002"
+      max_batch_size: 2048
+      timeout: 30
+      max_retries: 3
+    
+    sentence_transformers:
+      enabled: false
+      model_name: "all-MiniLM-L6-v2"
+      device: "cpu"  # cpu, cuda
+      batch_size: 32
+    
+    # Embedding Cache Configuration
+    cache:
+      max_size: 10000  # Maximum number of cached embeddings
+      ttl_hours: 24    # Time to live for cached embeddings
+      enable_persistence: true
+      cache_file: "data/embedding_cache.json"
+      auto_save_interval: 300  # Auto-save every 5 minutes
+    
+    # Quality Assessment Configuration
+    quality:
+      min_norm: 0.1
+      max_norm: 2.0
+      min_variance: 0.001
+      expected_dimensions: 1024
+      quality_threshold: 0.7
+      
+      # Quality scoring weights
+      norm_weight: 0.3
+      variance_weight: 0.2
+      dimension_weight: 0.3
+      validity_weight: 0.2
+    
+    # Performance optimization
+    performance:
+      enable_parallel_processing: true
+      max_workers: 4
+      chunk_processing_timeout: 30
+      batch_retry_delay: 1.0
+
+# Vector Storage Configuration (Phase 4.1)
+vector_storage:
+  storage_path: "data/vectors"
+  
+  # Chunk embedding index (1024-dim)
+  chunk_index_type: "ivf_flat"
+  chunk_dimension: 1024
+  chunk_nlist: 100
+  chunk_nprobe: 10
+  
+  # Site embedding index (384-dim)
+  site_index_type: "flat"
+  site_dimension: 384
+  site_nlist: 50
+  site_nprobe: 5
+  
+  # Performance settings
+  max_workers: 4
+  
+  # Cache configuration
+  cache:
+    enabled: true
+    max_size: 1000
+    ttl_hours: 24
+  
+  # Search performance
+  search_timeout_seconds: 30
+  max_search_results: 100
+
+# Folder Scanner Configuration (Phase 5.1)
+folder_scanner:
+  # Monitoring configuration
+  monitored_directories:
+    - "data/documents"
+    - "data/incoming"
+  scan_interval: 30  # seconds (faster for development)
+  max_depth: 5
+  enable_content_hashing: true
+  
+  # File filtering
+  supported_extensions:
+    - ".pdf"
+    - ".txt"
+    - ".docx"
+    - ".doc"
+    - ".md"
+    - ".json"
+    - ".csv"
+    - ".xlsx"
+    - ".pptx"
+  max_file_size_mb: 50  # Smaller for development
+  min_file_size_bytes: 1
+  exclude_patterns:
+    - ".*"
+    - "__pycache__"
+    - "*.tmp"
+    - "*.log"
+    - "*.bak"
+    - "*.swp"
+    - "~*"
+  
+  # Processing configuration
+  max_concurrent_files: 3  # Conservative for development
+  retry_attempts: 2
+  retry_delay: 30  # seconds
+  processing_timeout: 180  # seconds
+  
+  # Metadata extraction rules
+  path_metadata_rules:
+    site_extraction:
+      pattern: "site"
+      field: "site_id"
+      description: "Extract site ID from path containing 'site'"
+    category_extraction:
+      pattern: "category"
+      field: "category"
+      description: "Extract category from path containing 'category'"
+  auto_categorization: true
+  
+  # Performance settings (development-friendly)
+  enable_parallel_scanning: true
+  scan_batch_size: 50
+  memory_limit_mb: 256
+  
+  # Integration settings
+  auto_start: true
+  enable_monitoring: true

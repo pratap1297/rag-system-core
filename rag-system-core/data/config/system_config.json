@@ -1,0 +1,74 @@
+{
+  "environment": "development",
+  "debug": true,
+  "data_dir": "data",
+  "log_dir": "logs",
+  "database": {
+    "faiss_index_path": "data/vectors/index.faiss",
+    "metadata_path": "data/metadata",
+    "backup_path": "data/backups",
+    "max_backup_count": 5
+  },
+  "embedding": {
+    "provider": "sentence-transformers",
+    "model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "dimension": 384,
+    "batch_size": 32,
+    "device": "cpu",
+    "api_key": null
+  },
+  "llm": {
+    "provider": "groq",
+    "model_name": "mixtral-8x7b-32768",
+    "api_key": "your_groq_api_key_here",
+    "temperature": 0.1,
+    "max_tokens": 1000
+  },
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "workers": 1,
+    "reload": false,
+    "cors_origins": []
+  },
+  "ingestion": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200,
+    "supported_formats": [
+      ".pdf",
+      ".docx",
+      ".txt",
+      ".md"
+    ],
+    "max_file_size_mb": 100,
+    "batch_size": 10
+  },
+  "retrieval": {
+    "top_k": 5,
+    "similarity_threshold": 0.7,
+    "rerank_top_k": 3,
+    "enable_reranking": true
+  },
+  "monitoring": {
+    "enable_metrics": true,
+    "metrics_port": 9090,
+    "log_level": "INFO",
+    "log_format": "json"
+  },
+  "folder_monitoring": {
+    "enabled": true,
+    "check_interval_seconds": 60,
+    "monitored_folders": [],
+    "supported_extensions": [
+      ".txt",
+      ".md",
+      ".pdf",
+      ".docx",
+      ".json",
+      ".csv"
+    ],
+    "max_file_size_mb": 100,
+    "auto_ingest": true,
+    "recursive": true
+  }
+}

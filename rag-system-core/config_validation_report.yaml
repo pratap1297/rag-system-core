@@ -1,0 +1,90 @@
+environment: development
+migration_plan:
+- "\u2705 Configuration is already well-structured!"
+- '   - Consider running config optimization'
+timestamp: "The current date is: Thu 06/12/2025 \nEnter the new date: (mm-dd-yy)"
+validation_results:
+  api_keys:
+    issues: []
+    keys:
+      cohere:
+        configured: false
+        length: 0
+      groq:
+        configured: true
+        length: 56
+      openai:
+        configured: false
+        length: 0
+      rag_api:
+        configured: true
+        length: 32
+    status: good
+  azure_services:
+    issues: []
+    services:
+      chat:
+        has_endpoint: true
+        has_key: true
+        has_model: true
+        status: configured
+      computer_vision:
+        has_endpoint: true
+        has_key: true
+        status: configured
+      embeddings:
+        has_endpoint: true
+        has_key: true
+        has_model: true
+        status: configured
+    status: good
+  directories:
+    directories:
+      config:
+        exists: true
+        path: D:\Projects-D\Pepsi-updated\rag-system-core\config
+        writable: true
+      data:
+        exists: true
+        path: D:\Projects-D\Pepsi-updated\rag-system-core\data
+        writable: true
+      logs:
+        exists: true
+        path: D:\Projects-D\Pepsi-updated\rag-system-core\logs
+        writable: true
+      scripts:
+        exists: true
+        path: D:\Projects-D\Pepsi-updated\rag-system-core\scripts
+        writable: true
+      src:
+        exists: true
+        path: D:\Projects-D\Pepsi-updated\rag-system-core\src
+        writable: true
+    issues: []
+    status: good
+  env_file:
+    found_vars:
+    - AZURE_CHATAPI_KEY
+    - AZURE_CHAT_ENDPOINT
+    - AZURE_EMBEDDINGS_KEY
+    - AZURE_EMBEDDINGS_ENDPOINT
+    - GROQ_API_KEY
+    - RAG_API_KEY
+    issues: []
+    status: good
+  servicenow:
+    enabled: true
+    has_credentials: true
+    has_instance: true
+    issues: []
+    status: good
+  yaml_configs:
+    configs:
+      development:
+        issues: []
+        status: good
+      production:
+        issues: []
+        status: good
+    issues: []
+    status: good

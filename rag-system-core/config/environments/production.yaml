@@ -1,0 +1,769 @@
+# RAG System - Production Environment Configuration
+# Secure, optimized settings for production deployment
+
+# =============================================================================
+# ENVIRONMENT SETTINGS
+# =============================================================================
+environment: production
+debug: false
+data_dir: /app/data
+log_dir: /app/logs
+
+# =============================================================================
+# AZURE AI SERVICES CONFIGURATION
+# =============================================================================
+azure:
+  # Azure AI Hub Configuration
+  chat_api_key: "${AZURE_CHATAPI_KEY}"
+  chat_endpoint: "${AZURE_CHAT_ENDPOINT}"
+  embeddings_endpoint: "${AZURE_EMBEDDINGS_ENDPOINT}"
+  embeddings_key: "${AZURE_EMBEDDINGS_KEY}"
+  computer_vision_endpoint: "${AZURE_COMPUTER_VISION_ENDPOINT}"
+  computer_vision_key: "${AZURE_COMPUTER_VISION_KEY}"
+  
+  # Model Names
+  chat_model: "${CHAT_MODEL}"
+  embedding_model: "${EMBEDDING_MODEL}"
+  
+  # Azure AI Foundry Settings
+  foundry:
+    enabled: true
+    workspace_name: "${AZURE_WORKSPACE_NAME}"
+    resource_group: "${AZURE_RESOURCE_GROUP}"
+    subscription_id: "${AZURE_SUBSCRIPTION_ID}"
+    
+  # Azure Vision Read 4.0 (OCR)
+  vision:
+    enabled: true
+    api_version: "2024-02-01"
+    read_timeout: 60
+    max_retries: 5
+
+# =============================================================================
+# LLM CONFIGURATION
+# =============================================================================
+llm:
+  # Primary Provider Configuration
+  provider: "${LLM_PROVIDER:-azure}"  # Prefer Azure in production
+  
+  # Azure LLM Configuration (Primary for Production)
+  azure_llm:
+    api_key: "${AZURE_CHATAPI_KEY}"
+    endpoint: "${AZURE_CHAT_ENDPOINT}"
+    model_name: "${CHAT_MODEL}"
+    api_version: "2024-02-15-preview"
+    temperature: 0.1
+    max_tokens: 2000
+    timeout: 60
+  
+  # Groq Configuration (Fallback)
+  groq:
+    api_key: "${GROQ_API_KEY}"
+    model_name: "meta-llama/llama-4-maverick-17b-128e-instruct"
+    temperature: 0.1
+    max_tokens: 2000
+    timeout: 60
+  
+  # OpenAI Configuration (Fallback)
+  openai:
+    api_key: "${OPENAI_API_KEY:-}"
+    model_name: "gpt-4"
+    temperature: 0.1
+    max_tokens: 2000
+
+# =============================================================================
+# EMBEDDING CONFIGURATION
+# =============================================================================
+embedding:
+  # Primary Provider (Azure for production)
+  provider: "${EMBEDDING_PROVIDER:-azure}"
+  
+  # Azure Embeddings (Primary)
+  azure:
+    api_key: "${AZURE_EMBEDDINGS_KEY}"
+    endpoint: "${AZURE_EMBEDDINGS_ENDPOINT}"
+    model_name: "${EMBEDDING_MODEL}"
+    dimension: 1024
+    api_version: "2024-02-15-preview"
+    batch_size: 64
+  
+  # Cohere Embeddings (Fallback)
+  cohere:
+    api_key: "${COHERE_API_KEY:-}"
+    model_name: "embed-english-v3.0"
+    dimension: 1024
+    batch_size: 96
+
+# =============================================================================
+# API SERVER CONFIGURATION
+# =============================================================================
+api:
+  host: "0.0.0.0"
+  port: "${PORT:-8000}"
+  workers: "${API_WORKERS:-4}"
+  reload: false
+  cors_origins: "${CORS_ORIGINS:-[]}"
+  api_key: "${RAG_API_KEY}"
+  
+  # Rate Limiting (Production)
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
+    burst_limit: 20
+
+# =============================================================================
+# SERVICENOW INTEGRATION
+# =============================================================================
+servicenow:
+  enabled: "${SERVICENOW_SYNC_ENABLED:-true}"
+  instance: "${SERVICENOW_INSTANCE}"
+  username: "${SERVICENOW_USERNAME}"
+  password: "${SERVICENOW_PASSWORD}"
+  table: "${SERVICENOW_TABLE:-incident}"
+  
+  # Sync Configuration
+  sync:
+    enabled: true
+    interval_minutes: "${SERVICENOW_SYNC_INTERVAL:-60}"
+    max_records: "${SERVICENOW_MAX_RECORDS:-5000}"
+    fields: "${SERVICENOW_FIELDS}"
+    query_filter: "${SERVICENOW_QUERY_FILTER:-state!=7}"
+    date_field: "${SERVICENOW_DATE_FIELD:-sys_updated_on}"
+  
+  # Connection Settings
+  connection:
+    timeout: 60
+    max_retries: 5
+    verify_ssl: true
+    connection_pool_size: 10
+
+# =============================================================================
+# DATABASE CONFIGURATION
+# =============================================================================
+database:
+  faiss_index_path: "/app/data/vectors/index.faiss"
+  metadata_path: "/app/data/metadata"
+  backup_path: "/app/data/backups"
+  max_backup_count: 10
+  
+  # Performance Settings (Production Optimized)
+  faiss:
+    index_type: "IndexIVFFlat"  # Better for large datasets
+    nlist: 1024  # Number of clusters
+    nprobe: 32  # Search clusters
+    ef_search: 100  # For HNSW indices
+
+# =============================================================================
+# INGESTION CONFIGURATION
+# =============================================================================
+ingestion:
+  chunk_size: 1000
+  chunk_overlap: 200
+  max_file_size_mb: 500  # Larger files in production
+  batch_size: 50  # Larger batches for efficiency
+  
+  # Supported Formats
+  supported_formats:
+    - ".pdf"
+    - ".docx"
+    - ".doc"
+    - ".txt"
+    - ".md"
+    - ".json"
+    - ".csv"
+    - ".xlsx"
+    - ".pptx"
+  
+  # OCR Configuration (Azure Vision)
+  ocr:
+    enabled: true
+    provider: "azure"
+    confidence_threshold: 0.8
+    parallel_processing: true
+
+# =============================================================================
+# RETRIEVAL CONFIGURATION
+# =============================================================================
+retrieval:
+  top_k: 10
+  similarity_threshold: 0.75
+  rerank_top_k: 5
+  enable_reranking: true
+  
+  # Search Strategy
+  search:
+    strategy: "hybrid"
+    vector_weight: 0.8
+    keyword_weight: 0.2
+
+# =============================================================================
+# MONITORING CONFIGURATION
+# =============================================================================
+monitoring:
+  enable_metrics: true
+  metrics_port: 9090
+  log_level: "INFO"
+  log_format: "json"
+  
+  # Health Check
+  health_check:
+    enabled: true
+    interval_seconds: 30
+    timeout_seconds: 15
+  
+  # Performance Monitoring
+  performance:
+    track_response_times: true
+    track_memory_usage: true
+    track_api_calls: true
+    enable_profiling: false
+  
+  # Alerting
+  alerts:
+    enabled: true
+    webhook_url: "${ALERT_WEBHOOK_URL:-}"
+    error_threshold: 10
+    response_time_threshold: 5000
+
+# =============================================================================
+# FOLDER MONITORING CONFIGURATION
+# =============================================================================
+folder_monitoring:
+  enabled: true
+  check_interval_seconds: 300  # 5 minutes
+  auto_ingest: true
+  recursive: true
+  max_file_size_mb: 500
+  
+  # Monitored Folders
+  monitored_folders: "${MONITORED_FOLDERS:-[]}"
+  
+  # File Extensions to Monitor
+  supported_extensions:
+    - ".txt"
+    - ".md"
+    - ".pdf"
+    - ".docx"
+    - ".json"
+    - ".csv"
+    - ".xlsx"
+    - ".pptx"
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+security:
+  api_key_required: true
+  api_key: "${RAG_API_KEY}"
+  
+  # CORS Settings (Production - Restrictive)
+  cors:
+    allow_origins: "${CORS_ORIGINS}"
+    allow_methods: ["GET", "POST"]
+    allow_headers: ["Authorization", "Content-Type"]
+  
+  # Rate Limiting
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+    burst_limit: 20
+  
+  # SSL/TLS
+  ssl:
+    enabled: true
+    cert_file: "${SSL_CERT_FILE:-}"
+    key_file: "${SSL_KEY_FILE:-}"
+
+# =============================================================================
+# UI CONFIGURATION
+# =============================================================================
+ui:
+  gradio:
+    port: 7860
+    share: false
+    auth: "${GRADIO_AUTH:-}"  # username:password
+    theme: "default"
+    enable_queue: true
+    max_threads: 10
+  
+  servicenow:
+    port: 7861
+    share: false
+    auth: "${SERVICENOW_UI_AUTH:-}"
+
+# =============================================================================
+# CACHING CONFIGURATION
+# =============================================================================
+caching:
+  enabled: true
+  backend: "redis"  # redis, memory
+  redis:
+    host: "${REDIS_HOST:-localhost}"
+    port: "${REDIS_PORT:-6379}"
+    password: "${REDIS_PASSWORD:-}"
+    db: 0
+  
+  # Cache TTL (seconds)
+  ttl:
+    embeddings: 3600  # 1 hour
+    search_results: 1800  # 30 minutes
+    health_checks: 300  # 5 minutes
+
+# =============================================================================
+# BACKUP CONFIGURATION
+# =============================================================================
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention_days: 30
+  
+  # Backup Targets
+  targets:
+    - "/app/data/vectors"
+    - "/app/data/metadata"
+    - "/app/config"
+  
+  # Storage
+  storage:
+    type: "azure_blob"  # azure_blob, s3, local
+    container: "${BACKUP_CONTAINER:-}"
+    connection_string: "${BACKUP_CONNECTION_STRING:-}"
+
+# ===== LOGGING CONFIGURATION =====
+logging:
+  log_level: "INFO"
+  log_format: "json"
+  log_dir: "logs"
+  environment: "production"
+  console_output: true
+  file_output: true
+  structured_logging: true
+  log_rotation:
+    max_size_mb: 50
+    backup_count: 10
+  error_log:
+    max_size_mb: 100
+    backup_count: 20
+
+# ===== MONITORING CONFIGURATION =====
+monitoring:
+  enabled: true
+  metrics_retention_hours: 168  # 7 days
+  health_check_interval_seconds: 30
+  performance_monitoring: true
+  error_tracking: true
+  circuit_breaker:
+    enabled: true
+    failure_threshold: 3
+    recovery_timeout_seconds: 30
+
+# ===== DOCUMENT PROCESSING CONFIGURATION =====
+document_processing:
+  # Text extraction settings
+  text_extraction:
+    max_file_size: 52428800  # 50MB (stricter for production)
+    supported_formats: ['.pdf', '.docx', '.doc', '.txt']
+    ocr_enabled: true
+    fallback_to_ocr: true
+  
+  # Chunking configuration
+  chunking:
+    default_strategy: "fixed_size"
+    chunk_size: 800
+    chunk_overlap: 150
+    min_chunk_size: 100
+    max_chunk_size: 1500
+    
+    # Strategy-specific settings
+    strategies:
+      fixed_size:
+        chunk_size: 800
+        overlap: 150
+      sentence:
+        max_sentences: 4
+        max_chars: 1200
+      semantic:
+        similarity_threshold: 0.85
+        max_chunk_size: 1200
+  
+  # Metadata extraction
+  metadata:
+    extract_file_metadata: true
+    extract_content_metadata: true
+    language_detection: true
+    keyword_extraction: true
+    
+    # Content analysis
+    content_analysis:
+      word_count: true
+      readability_score: true
+      sentiment_analysis: false
+  
+  # OCR processing configuration (Production settings)
+  ocr:
+    enabled: true
+    primary_provider: "azure_vision"
+    fallback_provider: "llama_maverick"
+    enable_fallback: true
+    min_confidence: 0.8  # Higher threshold for production
+    cache_enabled: true
+    max_file_size: 52428800  # 50MB
+    
+    # Image preprocessing (more conservative for production)
+    image_preprocessing:
+      enabled: true
+      enhance_quality: true
+      max_image_size: 3000  # Smaller for production
+      noise_reduction: true
+      contrast_enhancement: false  # Disabled for stability
+      sharpness_enhancement: true
+    
+    # Azure Vision Read 4.0 settings
+    azure_vision:
+      api_version: "2024-02-01"
+      timeout_seconds: 45  # Shorter timeout for production
+      max_retries: 2
+      supported_languages: ["en", "es", "fr", "de", "it", "pt"]
+    
+    # LLAMA Maverick OCR settings
+    llama_maverick:
+      timeout_seconds: 20  # Shorter timeout for production
+      max_retries: 1
+      confidence_threshold: 0.85  # Higher threshold
+  
+  # Document Classification Configuration (Production settings)
+  classification:
+    enabled: true
+    confidence_threshold: 0.8  # Higher threshold for production
+    use_hybrid_approach: true
+    enable_caching: true
+    batch_size: 15  # Smaller batches for stability
+    max_concurrent: 3  # Conservative concurrency
+    
+    # LLAMA Maverick Classification
+    llama_config:
+      endpoint: "http://localhost:8080/v1/classify"
+      model_name: "llama-4-maverick"
+      timeout: 20  # Shorter timeout for production
+      max_retries: 2
+  
+  # Phase 3.1: Text Chunking Module (Production settings)
+  text_chunking:
+    # Chunking strategy configuration (production-optimized)
+    strategy: "document_aware"  # Most robust strategy for production
+    
+    # Size parameters (in tokens) - conservative for production
+    target_size: 800  # Smaller for better performance
+    max_size: 1200   # Reduced max size
+    min_size: 150    # Slightly higher minimum
+    overlap_size: 150  # Reduced overlap for efficiency
+    
+    # Token counting
+    model_name: "gpt-3.5-turbo"  # For accurate token counting
+    
+    # Quality assessment (stricter for production)
+    min_quality_score: 0.7  # Higher quality threshold
+    optimal_size_range: [600, 1000]  # Tighter range
+    
+    # Boundary detection (production-tuned)
+    boundary_detection:
+      section_headers:
+        enabled: true
+        confidence_weight: 0.9
+        patterns:
+          - "^#{1,6}\\s+.+$"  # Markdown headers
+          - "^\\d+\\.\\s+[A-Z][^.]*$"  # Numbered sections
+          - "^[A-Z][A-Z\\s]+:?\\s*$"  # ALL CAPS headers
+          - "^Chapter\\s+\\d+"
+          - "^Section\\s+\\d+"
+          - "^Part\\s+[IVX]+"
+      
+      paragraphs:
+        enabled: true
+        confidence_weight: 0.8  # Higher confidence for production
+        patterns:
+          - "\\n\\s*\\n"  # Double newlines
+          - "\\n\\s*[-•*]\\s+"  # Bullet points
+          - "\\n\\s*\\d+\\.\\s+"  # Numbered lists
+      
+      sentences:
+        enabled: true
+        confidence_weight: 0.6  # Slightly higher for production
+        patterns:
+          - "[.!?]+\\s+[A-Z]"  # Sentence endings
+          - "[.!?]+\\s*\\n"  # Sentence endings with newlines
+      
+      structures:
+        enabled: true
+        confidence_weight: 0.8
+        table_patterns:
+          - "\\n\\s*\\|.*\\|\\s*\\n"  # Markdown tables
+          - "\\n\\s*\\+[-+]+\\+\\s*\\n"  # ASCII tables
+    
+    # Document type adaptation (production-optimized)
+    document_type_rules:
+      technical_manual:
+        prioritize_boundaries: ["section_header", "paragraph"]
+        ignore_boundaries: []
+        boost_structure_score: 1.3  # Higher boost for production
+      
+      procedural_document:
+        prioritize_boundaries: ["section_header", "paragraph", "list"]
+        ignore_boundaries: ["sentence"]
+        boost_structure_score: 1.4
+      
+      safety_document:
+        prioritize_boundaries: ["section_header", "paragraph"]
+        ignore_boundaries: []
+        boost_completeness_score: 1.3
+      
+      incident_report:
+        prioritize_boundaries: ["paragraph", "sentence"]
+        ignore_boundaries: []
+        boost_coherence_score: 1.2
+      
+      maintenance_log:
+        prioritize_boundaries: ["paragraph", "list"]
+        ignore_boundaries: []
+        boost_structure_score: 1.2
+      
+      general:
+        prioritize_boundaries: ["paragraph", "sentence"]
+        ignore_boundaries: []
+        boost_coherence_score: 1.0
+    
+    # Performance and caching (production-optimized)
+    caching:
+      enabled: true
+      max_cache_size: 500  # Smaller cache for production memory efficiency
+      cache_ttl_hours: 12  # Shorter TTL for production
+    
+    # Quality metrics weights (production-tuned)
+    quality_weights:
+      completeness: 0.35  # Higher weight on completeness
+      coherence: 0.35     # Higher weight on coherence
+      structure: 0.2
+      size: 0.1           # Lower weight on size optimization
+    
+    # Processing limits (conservative for production)
+    max_concurrent_chunks: 5  # Reduced concurrency
+    processing_timeout_seconds: 30  # Shorter timeout
+  
+  # Processing pipeline
+  pipeline:
+    max_concurrent_files: 5
+    batch_size: 20
+    retry_attempts: 3
+    timeout_seconds: 600
+    
+    # Quality assurance
+    validation:
+      enabled: true
+      strict_mode: true
+      max_file_size: 52428800  # 50MB
+      min_file_size: 10
+      blocked_formats: ['.exe', '.bat', '.sh', '.cmd', '.scr', '.vbs']
+    
+    # Output settings
+    output:
+      save_metadata: true
+      save_chunks: true
+      save_processing_logs: true
+      compression: true
+
+  # Phase 3.2: Vector Embedding Configuration (Production settings)
+  vector_embedding:
+    # Provider configuration (production-optimized)
+    default_provider: "cohere_embed_v3"
+    batch_size: 24  # Smaller batches for production stability
+    max_concurrent_batches: 3  # Conservative concurrency
+    enable_caching: true
+    
+    # Cohere Embed v3 Configuration (production settings)
+    cohere:
+      enabled: true
+      api_key: "${COHERE_API_KEY}"
+      api_endpoint: "https://api.cohere.ai/v1/embed"
+      model_name: "embed-english-v3.0"
+      max_batch_size: 64  # Smaller than development
+      timeout: 20  # Shorter timeout for production
+      max_retries: 2  # Fewer retries for faster failure detection
+      requests_per_minute: 80  # Conservative rate limiting
+    
+    # Alternative providers (disabled in production by default)
+    openai:
+      enabled: false
+      api_key: "${OPENAI_API_KEY}"
+      model_name: "text-embedding-ada-002"
+      max_batch_size: 1024
+      timeout: 20
+      max_retries: 2
+    
+    sentence_transformers:
+      enabled: false
+      model_name: "all-MiniLM-L6-v2"
+      device: "cpu"  # CPU only for production stability
+      batch_size: 16
+    
+    # Embedding Cache Configuration (production-optimized)
+    cache:
+      max_size: 5000  # Smaller cache for production memory efficiency
+      ttl_hours: 12   # Shorter TTL for production freshness
+      enable_persistence: true
+      cache_file: "data/production_embedding_cache.json"
+      auto_save_interval: 180  # Auto-save every 3 minutes
+      enable_compression: true  # Compress cache for production
+    
+    # Quality Assessment Configuration (stricter for production)
+    quality:
+      min_norm: 0.2  # Stricter minimum norm
+      max_norm: 1.8  # Stricter maximum norm
+      min_variance: 0.002  # Higher minimum variance
+      expected_dimensions: 1024
+      quality_threshold: 0.8  # Higher quality threshold for production
+      
+      # Quality scoring weights (production-tuned)
+      norm_weight: 0.35
+      variance_weight: 0.25
+      dimension_weight: 0.25
+      validity_weight: 0.15
+    
+    # Performance optimization (production settings)
+    performance:
+      enable_parallel_processing: true
+      max_workers: 2  # Conservative worker count
+      chunk_processing_timeout: 20  # Shorter timeout
+      batch_retry_delay: 2.0  # Longer delay between retries
+      enable_monitoring: true  # Enable detailed monitoring
+      
+    # Production monitoring and alerting
+    monitoring:
+      enable_metrics: true
+      metrics_interval: 60  # Collect metrics every minute
+      alert_on_failures: true
+      failure_threshold: 5  # Alert after 5 consecutive failures
+      performance_threshold: 30  # Alert if processing takes >30s 
+
+# Vector Storage Configuration (Phase 4.1)
+vector_storage:
+  storage_path: "data/vectors"
+  
+  # Chunk embedding index (1024-dim) - Production optimized
+  chunk_index_type: "ivf_hnsw"  # More advanced index for production
+  chunk_dimension: 1024
+  chunk_nlist: 200  # More clusters for better accuracy
+  chunk_nprobe: 20  # More probes for better recall
+  
+  # Site embedding index (384-dim)
+  site_index_type: "ivf_flat"  # Upgrade from flat for production
+  site_dimension: 384
+  site_nlist: 100
+  site_nprobe: 10
+  
+  # Performance settings - Conservative for production
+  max_workers: 6
+  
+  # Cache configuration - Larger cache for production
+  cache:
+    enabled: true
+    max_size: 5000
+    ttl_hours: 48
+  
+  # Search performance - Stricter limits for production
+  search_timeout_seconds: 15
+  max_search_results: 50
+  
+  # Production-specific settings
+  backup:
+    enabled: true
+    interval_hours: 6
+    retention_days: 30
+    backup_path: "backups/vectors"
+  
+  monitoring:
+    enabled: true
+    metrics_collection: true
+    performance_alerts: true
+    memory_threshold_mb: 2048
+
+# Folder Scanner Configuration (Phase 5.1)
+folder_scanner:
+  # Monitoring configuration
+  monitored_directories:
+    - "data/documents"
+    - "data/incoming"
+    - "/shared/documents"  # Production shared storage
+  scan_interval: 120  # seconds (less frequent for production)
+  max_depth: 8  # Deeper for production hierarchies
+  enable_content_hashing: true
+  
+  # File filtering
+  supported_extensions:
+    - ".pdf"
+    - ".txt"
+    - ".docx"
+    - ".doc"
+    - ".md"
+    - ".json"
+    - ".csv"
+    - ".xlsx"
+    - ".pptx"
+    - ".rtf"
+    - ".odt"
+  max_file_size_mb: 200  # Larger for production
+  min_file_size_bytes: 10  # Ignore very small files
+  exclude_patterns:
+    - ".*"
+    - "__pycache__"
+    - "*.tmp"
+    - "*.log"
+    - "*.bak"
+    - "*.swp"
+    - "~*"
+    - "*.lock"
+    - "*.cache"
+    - "Thumbs.db"
+    - ".DS_Store"
+  
+  # Processing configuration (production-optimized)
+  max_concurrent_files: 8  # Higher for production
+  retry_attempts: 5  # More retries for production
+  retry_delay: 120  # seconds (longer delay)
+  processing_timeout: 600  # seconds (10 minutes)
+  
+  # Metadata extraction rules (production-specific)
+  path_metadata_rules:
+    site_extraction:
+      pattern: "site"
+      field: "site_id"
+      description: "Extract site ID from path containing 'site'"
+    facility_extraction:
+      pattern: "facility"
+      field: "site_id"
+      description: "Extract facility ID from path containing 'facility'"
+    location_extraction:
+      pattern: "location"
+      field: "site_id"
+      description: "Extract location ID from path containing 'location'"
+    category_extraction:
+      pattern: "category"
+      field: "category"
+      description: "Extract category from path containing 'category'"
+    department_extraction:
+      pattern: "dept"
+      field: "department"
+      description: "Extract department from path containing 'dept'"
+    division_extraction:
+      pattern: "division"
+      field: "department"
+      description: "Extract division from path containing 'division'"
+  auto_categorization: true
+  
+  # Performance settings (production-optimized)
+  enable_parallel_scanning: true
+  scan_batch_size: 200  # Larger batches for efficiency
+  memory_limit_mb: 1024  # Higher memory limit
+  
+  # Integration settings
+  auto_start: true
+  enable_monitoring: true 

@@ -1,0 +1,20 @@
+Technical Specifications - Industrial Equipment
+
+Model: XYZ-2000 Processing Unit
+Capacity: 500 units/hour
+Power Requirements: 480V, 3-phase, 60Hz
+Operating Temperature: 10°C to 40°C
+Dimensions: 2.5m x 1.8m x 2.2m
+Weight: 1,200 kg
+
+Performance Specifications:
+- Processing Speed: 8.3 units/minute
+- Accuracy: ±0.1mm
+- Repeatability: ±0.05mm
+- Cycle Time: 7.2 seconds
+
+Maintenance Schedule:
+- Daily: Visual inspection
+- Weekly: Lubrication check
+- Monthly: Calibration verification
+- Quarterly: Full system audit
